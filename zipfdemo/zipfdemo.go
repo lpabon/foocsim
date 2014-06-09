@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"github.com/lpabon/godbc"
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -15,13 +18,20 @@ func main() {
 	z := rand.NewZipf(r, s, v, imax)
 	h := make(map[uint64]int)
 
-	for i := 0; i < 10000000; i++ {
+	for i := 0; i < 20000000; i++ {
 		h[z.Uint64()] += 1
 	}
+	if false {
+		fp, err := os.Create("filecc.data")
+		godbc.Check(err == nil)
+		defer fp.Close()
+		w := bufio.NewWriter(fp)
 
-	for k, v := range h {
-		if v >= 10 {
-			fmt.Printf("%v %d\n", k, v)
+		for k, v := range h {
+			if v >= 10 {
+				_, err := w.WriteString(fmt.Sprintf("%v %d\n", k, v))
+				godbc.Check(err == nil)
+			}
 		}
 	}
 
