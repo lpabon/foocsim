@@ -22,6 +22,7 @@ type LoadInfo struct {
 
 func NewZipfWorkload(imax uint64, readp int) *ZipfWorkload {
 	godbc.Require(0 <= readp && readp <= 100)
+	godbc.Require(imax > 0)
 
 	s := float64(1.1)
 	v := float64(10)
@@ -40,18 +41,27 @@ func NewZipfWorkload(imax uint64, readp int) *ZipfWorkload {
 }
 
 func (z *ZipfWorkload) ZipfGenerate() (uint64, bool) {
+	godbc.Invariant(z)
 	return z.zipf.Uint64(), z.rv.Intn(100) < z.readp
 }
 
-func main() {
-	/*
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+func (z *ZipfWorkload) Invariant() bool {
+	if (z.rv != nil) &&
+		(z.zipf != nil) &&
+		(0 <= z.readp && z.readp <= 100) &&
+		(z.objs > 0) {
+		return true
+	}
+	return false
 
-		imax := uint64(1 * 1024 * 1024 * 1024) // Max number of ints
-		s := float64(1.1)
-		v := float64(10)
-		z := rand.NewZipf(r, s, v, imax)
-	*/
+}
+
+func (z *ZipfWorkload) String() string {
+	return fmt.Sprintf("objs:%v readp:%v zipf:%v rv:%v",
+		z.objs, z.readp, z.zipf, z.rv)
+}
+
+func main() {
 	z := NewZipfWorkload(1*1024*1024*1024, 90)
 	h := make(map[uint64]*LoadInfo)
 
