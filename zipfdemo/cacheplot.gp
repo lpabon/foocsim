@@ -3,22 +3,22 @@
 set terminal png
 set datafile separator ","
 set output "cache_readhitrate.png"
-plot "cache.data" using 1:2 every 25 title "Read Hit Rate"
+plot "cache.data" using 1:2 every 5 title "Read Hit Rate"
 
 set output "cache_writehitrate.png"
-plot "cache.data" using 1:3 every 25 title "Write Hit Rate"
+plot "cache.data" using 1:3 every 5 title "Write Hit Rate"
 
 set output "cache_reads.png"
-plot "cache.data" using 1:7 every 25 title "Reads", \
-	 "cache.data" using 1:4 every 25 title "Read Hits"
+plot "cache.data" using 1:7 every 5 title "Reads", \
+	 "cache.data" using 1:4 every 5 title "Read Hits"
 
 set output "cache_writes.png"
-plot "cache.data" using 1:8 every 25 title "Writes", \
-     "cache.data" using 1:5 every 25 title "Write Hits"
+plot "cache.data" using 1:8 every 5 title "Writes", \
+     "cache.data" using 1:5 every 5 title "Write Hits"
 
 set output "cache_deletes.png"
-plot "cache.data" using 1:9 every 25 title "Deletions", \
-     "cache.data" using 1:6 every 25 title "Deletion Hits"
+plot "cache.data" using 1:9 every 5 title "Deletions", \
+     "cache.data" using 1:6 every 5 title "Deletion Hits"
 
 set output "cache_evictions.png"
-plot "cache.data" using 1:11 every 25 title "Evictions"
+plot "cache.data" using 1:11 every 5 title "Evictions"
