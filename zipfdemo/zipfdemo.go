@@ -48,6 +48,7 @@ type Cache struct {
 	cachesize                uint64
 	readhits, writehits      int
 	reads, writes            int
+	deletions, deletionhits  int
 	evictions, invalidations int
 	insertions               int
 }
@@ -112,6 +113,15 @@ func (c *Cache) Read(obj, chunk string) {
 	}
 }
 
+func (c *Cache) Delete(obj string) {
+	c.deletions++
+
+	if _, ok := c.cacheobjids[obj]; ok {
+		c.deletionhits++
+		delete(c.cacheobjids, obj)
+	}
+}
+
 func (c *Cache) ReadHitRate() float64 {
 	if c.reads == 0 {
 		return 0.0
@@ -136,18 +146,47 @@ func (c *Cache) String() string {
 			"Write Hit Rate: %v\n"+
 			"Read hits: %d\n"+
 			"Write hits: %d\n"+
+			"Delete hits: %d\n"+
 			"Reads: %d\n"+
 			"Writes: %d\n"+
+			"Deletions: %d\n"+
 			"Insertions: %d\n"+
 			"Invalidations: %d\n",
 		c.ReadHitRate(),
 		c.WriteHitRate(),
 		c.readhits,
 		c.writehits,
+		c.deletionhits,
 		c.reads,
 		c.writes,
+		c.deletions,
 		c.insertions,
 		c.invalidations)
+}
+
+func (c *Cache) Dump() string {
+	return fmt.Sprintf(
+		"%v,"+ // Read Hit Rate 1
+			"%v,"+ // Write Hit Rate 2
+			"%d,"+ // Read Hits 3
+			"%d,"+ // Write Hits 4
+			"%d,"+ // Deletion Hits 5
+			"%d,"+ // Reads 6
+			"%d,"+ // Writes 7
+			"%d,"+ // Deletions 8
+			"%d,"+ // Insertions 9
+			"%d\n", // Invalidations 10
+		c.ReadHitRate(),
+		c.WriteHitRate(),
+		c.readhits,
+		c.writehits,
+		c.deletionhits,
+		c.reads,
+		c.writes,
+		c.deletions,
+		c.insertions,
+		c.invalidations)
+
 }
 
 type SimFile struct {
@@ -164,7 +203,7 @@ func main() {
 	// Config
 	maxfilesize := int64(1 * 1024 * 1024 * 1024)
 	numfiles := 1000
-	numios := 100000000
+	numios := 10000000
 
 	// Create environment
 	filezipf := zipfworkload.NewZipfWorkload(uint64(numfiles), 0)
@@ -177,12 +216,23 @@ func main() {
 		files[file].blockinfo = make(map[uint64]*LoadInfo)
 	}
 
+	// Setup file to write cache metrics
+	fp, err := os.Create("cache.data")
+	godbc.Check(err == nil)
+	metrics := bufio.NewWriter(fp)
+	defer metrics.Flush()
+	defer fp.Close()
+
 	// Create the cache
 	cache := &Cache{}
 	cache.cacheobjids = make(map[string]string)
 	cache.cachemap = make(map[string]int)
 
 	for io := 0; io < numios; io++ {
+		if (io % 10000) == 0 {
+			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + cache.Dump())
+			godbc.Check(err == nil)
+		}
 		// Get the file
 		file, _ := filezipf.ZipfGenerate()
 		godbc.Check(int(file) <= numfiles, fmt.Sprintf("file = %v", file))
@@ -205,21 +255,6 @@ func main() {
 			cache.Write(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
 			//files[file].blockinfo[obj].writes += 1
 		}
-	}
-
-	fp, err := os.Create("files.data")
-	godbc.Check(err == nil)
-	defer fp.Close()
-	w := bufio.NewWriter(fp)
-
-	for file := range files {
-		_, err := w.WriteString(fmt.Sprintf("%s %v %v %v %v\n",
-			files[file].name,
-			files[file].size,
-			files[file].ios,
-			files[file].reads,
-			files[file].writes))
-		godbc.Check(err == nil)
 	}
 
 	fmt.Print(cache)
