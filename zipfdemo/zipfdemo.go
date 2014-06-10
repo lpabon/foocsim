@@ -80,8 +80,34 @@ func (c *Cache) Invalidate(chunkkey string) {
 	}
 }
 
+func (c *Cache) Evict() {
+	c.evictions++
+
+	// BIG ASSUMPTION! I have no idea
+	// if Go keeps track of the iteration
+	// through a map
+	for {
+		for key, val := range c.cachemap {
+			if val == 1 {
+
+				// Clock Algorithm: We looked at it
+				// and set to zero for next time
+				c.cachemap[key] = 0
+			} else {
+				delete(c.cachemap, key)
+				return
+			}
+		}
+	}
+}
+
 func (c *Cache) Insert(chunkkey string) {
 	c.insertions++
+
+	if uint64(len(c.cachemap)) > c.cachesize {
+		c.Evict()
+	}
+
 	c.cachemap[chunkkey] = 1
 }
 
@@ -109,6 +135,10 @@ func (c *Cache) Read(obj, chunk string) {
 	if _, ok := c.cachemap[key]; ok {
 		// Read Hit
 		c.readhits++
+
+		// Clock Algorithm: Set that we looked
+		// at it
+		c.cachemap[key] = 1
 	} else {
 		// Read miss
 		// We would do IO here
@@ -175,6 +205,7 @@ func (c *Cache) String() string {
 			"Writes: %d\n"+
 			"Deletions: %d\n"+
 			"Insertions: %d\n"+
+			"Evictions: %d\n"+
 			"Invalidations: %d\n",
 		c.ReadHitRate(),
 		c.WriteHitRate(),
@@ -185,6 +216,7 @@ func (c *Cache) String() string {
 		c.writes,
 		c.deletions,
 		c.insertions,
+		c.evictions,
 		c.invalidations)
 }
 
@@ -199,7 +231,8 @@ func (c *Cache) Dump() string {
 			"%d,"+ // Writes 7
 			"%d,"+ // Deletions 8
 			"%d,"+ // Insertions 9
-			"%d\n", // Invalidations 10
+			"%d,"+ // Evictions 10
+			"%d\n", // Invalidations 11
 		c.ReadHitRate(),
 		c.WriteHitRate(),
 		c.readhits,
@@ -209,6 +242,7 @@ func (c *Cache) Dump() string {
 		c.writes,
 		c.deletions,
 		c.insertions,
+		c.evictions,
 		c.invalidations)
 
 }
@@ -224,7 +258,8 @@ func (c *Cache) DumpDelta(prev *Cache) string {
 			"%d,"+ // Writes 7
 			"%d,"+ // Deletions 8
 			"%d,"+ // Insertions 9
-			"%d\n", // Invalidations 10
+			"%d,"+ // Evictions 10
+			"%d\n", // Invalidations 11
 		c.ReadHitRateDelta(prev),
 		c.WriteHitRateDelta(prev),
 		c.readhits-prev.readhits,
@@ -234,6 +269,7 @@ func (c *Cache) DumpDelta(prev *Cache) string {
 		c.writes-prev.writes,
 		c.deletions-prev.deletions,
 		c.insertions-prev.insertions,
+		c.evictions-prev.evictions,
 		c.invalidations-prev.invalidations)
 
 }
@@ -247,13 +283,18 @@ type SimFile struct {
 }
 
 func main() {
+
+	// Setup seed for random numbers
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Config
-	maxfilesize := int64(1 * 1024 * 1024 * 1024)
+	chunksize := 256 * 1024
+	maxfilesize := int64(10*1024*1024*1024) / int64(chunksize) // Up to 10 GB in 256k chunks
+	cachesize := uint64(1*1024*1024*1024) / uint64(chunksize)  // 1 GB divided into 256k chunks
 	numfiles := 10000
 	numios := 100000000
 	deletion_chance := 10 // percent
+	read_chance := 65     // percent
 	writethrough := true
 
 	// Create environment
@@ -262,7 +303,7 @@ func main() {
 	for file := 0; file < numfiles; file++ {
 		files[file] = &SimFile{}
 		files[file].size = uint64(r.Int63n(maxfilesize))
-		files[file].iogen = zipfworkload.NewZipfWorkload(files[file].size, 75)
+		files[file].iogen = zipfworkload.NewZipfWorkload(files[file].size, read_chance)
 		files[file].name = strconv.Itoa(file)
 		files[file].blockinfo = make(map[uint64]*LoadInfo)
 	}
@@ -271,12 +312,15 @@ func main() {
 	fp, err := os.Create("cache.data")
 	godbc.Check(err == nil)
 	metrics := bufio.NewWriter(fp)
+
+	// XXX Don't know if this works.. probably does not
 	defer metrics.Flush()
 	defer fp.Close()
 
 	// Create the cache
 	cache_prev := &Cache{}
 	cache := &Cache{}
+	cache.cachesize = cachesize
 	cache.writethrough = writethrough
 	cache.cacheobjids = make(map[string]string)
 	cache.cachemap = make(map[string]int)
@@ -304,6 +348,8 @@ func main() {
 
 		// Which block on the file
 		chunk, isread := files[file].iogen.ZipfGenerate()
+
+		// Track the number of IOs to this file
 		files[file].ios++
 
 		//if nil == files[file].blockinfo[obj] {

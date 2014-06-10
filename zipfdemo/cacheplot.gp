@@ -19,3 +19,6 @@ plot "cache.data" using 1:8 every 25 title "Writes", \
 set output "cache_deletes.png"
 plot "cache.data" using 1:9 every 25 title "Deletions", \
      "cache.data" using 1:6 every 25 title "Deletion Hits"
+
+set output "cache_evictions.png"
+plot "cache.data" using 1:11 every 25 title "Evictions"
