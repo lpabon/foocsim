@@ -51,6 +51,7 @@ type Cache struct {
 	deletions, deletionhits  int
 	evictions, invalidations int
 	insertions               int
+	writethrough             bool
 }
 
 func CacheCreateObjKey(obj string) func() string {
@@ -95,7 +96,9 @@ func (c *Cache) Write(obj string, chunk string) {
 	// We would do back end IO here
 
 	// Insert
-	c.Insert(key)
+	if c.writethrough {
+		c.Insert(key)
+	}
 }
 
 func (c *Cache) Read(obj, chunk string) {
@@ -135,6 +138,27 @@ func (c *Cache) WriteHitRate() float64 {
 		return 0.0
 	} else {
 		return float64(c.writehits) / float64(c.writes)
+	}
+
+}
+
+func (c *Cache) ReadHitRateDelta(prev *Cache) float64 {
+	reads := c.reads - prev.reads
+	readhits := c.readhits - prev.readhits
+	if reads == 0 {
+		return 0.0
+	} else {
+		return float64(readhits) / float64(reads)
+	}
+}
+
+func (c *Cache) WriteHitRateDelta(prev *Cache) float64 {
+	writes := c.writes - prev.writes
+	writehits := c.writehits - prev.writehits
+	if writes == 0 {
+		return 0.0
+	} else {
+		return float64(writehits) / float64(writes)
 	}
 
 }
@@ -189,6 +213,31 @@ func (c *Cache) Dump() string {
 
 }
 
+func (c *Cache) DumpDelta(prev *Cache) string {
+	return fmt.Sprintf(
+		"%v,"+ // Read Hit Rate 1
+			"%v,"+ // Write Hit Rate 2
+			"%d,"+ // Read Hits 3
+			"%d,"+ // Write Hits 4
+			"%d,"+ // Deletion Hits 5
+			"%d,"+ // Reads 6
+			"%d,"+ // Writes 7
+			"%d,"+ // Deletions 8
+			"%d,"+ // Insertions 9
+			"%d\n", // Invalidations 10
+		c.ReadHitRateDelta(prev),
+		c.WriteHitRateDelta(prev),
+		c.readhits-prev.readhits,
+		c.writehits-prev.writehits,
+		c.deletionhits-prev.deletionhits,
+		c.reads-prev.reads,
+		c.writes-prev.writes,
+		c.deletions-prev.deletions,
+		c.insertions-prev.insertions,
+		c.invalidations-prev.invalidations)
+
+}
+
 type SimFile struct {
 	iogen              *zipfworkload.ZipfWorkload
 	blockinfo          map[uint64]*LoadInfo
@@ -202,8 +251,10 @@ func main() {
 
 	// Config
 	maxfilesize := int64(1 * 1024 * 1024 * 1024)
-	numfiles := 1000
-	numios := 10000000
+	numfiles := 10000
+	numios := 100000000
+	deletion_chance := 10 // percent
+	writethrough := true
 
 	// Create environment
 	filezipf := zipfworkload.NewZipfWorkload(uint64(numfiles), 0)
@@ -224,18 +275,32 @@ func main() {
 	defer fp.Close()
 
 	// Create the cache
+	cache_prev := &Cache{}
 	cache := &Cache{}
+	cache.writethrough = writethrough
 	cache.cacheobjids = make(map[string]string)
 	cache.cachemap = make(map[string]int)
 
 	for io := 0; io < numios; io++ {
+
+		// Save metrics
 		if (io % 10000) == 0 {
-			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + cache.Dump())
+			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + cache.DumpDelta(cache_prev))
 			godbc.Check(err == nil)
+
+			// Now copy the data
+			*cache_prev = *cache
 		}
+
 		// Get the file
 		file, _ := filezipf.ZipfGenerate()
 		godbc.Check(int(file) <= numfiles, fmt.Sprintf("file = %v", file))
+
+		// Check if we need to delete this file
+		if rand.Intn(100) < deletion_chance {
+			cache.Delete(strconv.FormatUint(file, 10))
+			continue
+		}
 
 		// Which block on the file
 		chunk, isread := files[file].iogen.ZipfGenerate()
