@@ -42,13 +42,112 @@ func demo(z *zipfworkload.ZipfWorkload) {
 	}
 }
 
-type CachePerformance struct {
-	reads, writes uint64
+type Cache struct {
+	cacheobjids              map[string]string
+	cachemap                 map[string]int
+	cachesize                uint64
+	readhits, writehits      int
+	reads, writes            int
+	evictions, invalidations int
+	insertions               int
 }
 
-type Cache struct {
-	cachemap  map[string]int
-	cachesize uint64
+func CacheCreateObjKey(obj string) func() string {
+	counter := 0
+	return func() string {
+		counter += 1
+		return strconv.Itoa(counter)
+	}
+}
+
+func (c *Cache) GetObjKey(obj string) string {
+	if val, ok := c.cacheobjids[obj]; ok {
+		return val
+	} else {
+		newid := CacheCreateObjKey(obj)
+		c.cacheobjids[obj] = newid()
+		return c.cacheobjids[obj]
+	}
+}
+
+func (c *Cache) Invalidate(chunkkey string) {
+	if _, ok := c.cachemap[chunkkey]; ok {
+		c.writehits++
+		c.invalidations++
+		delete(c.cachemap, chunkkey)
+	}
+}
+
+func (c *Cache) Insert(chunkkey string) {
+	c.insertions++
+	c.cachemap[chunkkey] = 1
+}
+
+func (c *Cache) Write(obj string, chunk string) {
+	c.writes++
+
+	key := c.GetObjKey(obj) + chunk
+
+	// Invalidate
+	c.Invalidate(key)
+
+	// We would do back end IO here
+
+	// Insert
+	c.Insert(key)
+}
+
+func (c *Cache) Read(obj, chunk string) {
+	c.reads++
+
+	key := c.GetObjKey(obj) + chunk
+
+	if _, ok := c.cachemap[key]; ok {
+		// Read Hit
+		c.readhits++
+	} else {
+		// Read miss
+		// We would do IO here
+		c.Insert(key)
+	}
+}
+
+func (c *Cache) ReadHitRate() float64 {
+	if c.reads == 0 {
+		return 0.0
+	} else {
+		return float64(c.readhits) / float64(c.reads)
+	}
+}
+
+func (c *Cache) WriteHitRate() float64 {
+	if c.writes == 0 {
+		return 0.0
+	} else {
+		return float64(c.writehits) / float64(c.writes)
+	}
+
+}
+
+func (c *Cache) String() string {
+	return fmt.Sprintf(
+		"Cache Information:\n"+
+			"Read Hit Rate: %v\n"+
+			"Write Hit Rate: %v\n"+
+			"Read hits: %d\n"+
+			"Write hits: %d\n"+
+			"Reads: %d\n"+
+			"Writes: %d\n"+
+			"Insertions: %d\n"+
+			"Invalidations: %d\n",
+		c.ReadHitRate(),
+		c.WriteHitRate(),
+		c.readhits,
+		c.writehits,
+		c.reads,
+		c.writes,
+		c.insertions,
+		c.invalidations)
 }
 
 type SimFile struct {
@@ -78,13 +177,18 @@ func main() {
 		files[file].blockinfo = make(map[uint64]*LoadInfo)
 	}
 
+	// Create the cache
+	cache := &Cache{}
+	cache.cacheobjids = make(map[string]string)
+	cache.cachemap = make(map[string]int)
+
 	for io := 0; io < numios; io++ {
 		// Get the file
 		file, _ := filezipf.ZipfGenerate()
 		godbc.Check(int(file) <= numfiles, fmt.Sprintf("file = %v", file))
 
 		// Which block on the file
-		_, isread := files[file].iogen.ZipfGenerate()
+		chunk, isread := files[file].iogen.ZipfGenerate()
 		files[file].ios++
 
 		//if nil == files[file].blockinfo[obj] {
@@ -94,9 +198,11 @@ func main() {
 		//files[file].blockinfo[obj].numaccess += 1
 		if isread {
 			files[file].reads++
+			cache.Read(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
 			//files[file].blockinfo[obj].reads += 1
 		} else {
 			files[file].writes++
+			cache.Write(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
 			//files[file].blockinfo[obj].writes += 1
 		}
 	}
@@ -115,6 +221,8 @@ func main() {
 			files[file].writes))
 		godbc.Check(err == nil)
 	}
+
+	fmt.Print(cache)
 
 	//c = &Cache{}
 	/*
