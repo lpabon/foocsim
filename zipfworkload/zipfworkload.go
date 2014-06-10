@@ -14,12 +14,10 @@ type ZipfWorkload struct {
 	rv    *rand.Rand
 }
 
-func NewZipfWorkload(imax uint64, readp int) *ZipfWorkload {
+func NewZipfWorkloadsv(imax uint64, readp int, s float64, v float64) *ZipfWorkload {
 	godbc.Require(0 <= readp && readp <= 100)
 	godbc.Require(imax > 0)
 
-	s := float64(1.1)
-	v := float64(10)
 	z := ZipfWorkload{}
 	z.rv = rand.New(rand.NewSource(time.Now().UnixNano()))
 	z.zipf = rand.NewZipf(z.rv, s, v, imax-1)
@@ -32,6 +30,10 @@ func NewZipfWorkload(imax uint64, readp int) *ZipfWorkload {
 	godbc.Ensure(z.rv != nil)
 
 	return &z
+}
+
+func NewZipfWorkload(imax uint64, readp int) *ZipfWorkload {
+	return NewZipfWorkloadsv(imax, readp, 1.1, 10)
 }
 
 func (z *ZipfWorkload) ZipfGenerate() (uint64, bool) {

@@ -27,7 +27,7 @@ func main() {
 	// Config
 	chunksize := 256 * 1024
 	maxfilesize := int64(10*1024*1024*1024) / int64(chunksize) // Up to 10 GB in 256k chunks
-	cachesize := uint64(1*1024*1024*1024) / uint64(chunksize)  // 1 GB divided into 256k chunks
+	cachesize := uint64(8*1024*1024*1024) / uint64(chunksize)  // 8 GB divided into 256k chunks
 	numfiles := 1000
 	numios := 5000000
 	deletion_chance := 15 // percent
@@ -47,11 +47,8 @@ func main() {
 	// Setup file to write cache metrics
 	fp, err := os.Create("cache.data")
 	godbc.Check(err == nil)
-	metrics := bufio.NewWriter(fp)
-
-	// XXX Don't know if this works.. probably does not
-	defer metrics.Flush()
 	defer fp.Close()
+	metrics := bufio.NewWriter(fp)
 
 	// Create the cache
 	cache := caches.NewCache(cachesize, writethrough)
@@ -60,7 +57,7 @@ func main() {
 	for io := 0; io < numios; io++ {
 
 		// Save metrics
-		if (io % 10000) == 0 {
+		if (io % 100) == 0 {
 			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + cache.DumpDelta(cache_prev))
 			godbc.Check(err == nil)
 
@@ -92,6 +89,6 @@ func main() {
 			cache.Write(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
 		}
 	}
-
+	metrics.Flush()
 	fmt.Print(cache)
 }
