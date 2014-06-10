@@ -22,7 +22,7 @@ func NewZipfWorkload(imax uint64, readp int) *ZipfWorkload {
 	v := float64(10)
 	z := ZipfWorkload{}
 	z.rv = rand.New(rand.NewSource(time.Now().UnixNano()))
-	z.zipf = rand.NewZipf(z.rv, s, v, imax)
+	z.zipf = rand.NewZipf(z.rv, s, v, imax-1)
 	z.readp = readp
 	z.objs = imax
 
