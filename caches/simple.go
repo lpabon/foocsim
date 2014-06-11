@@ -2,7 +2,7 @@ package caches
 
 import (
 	"fmt"
-	//	"github.com/lpabon/godbc"
+	"github.com/lpabon/godbc"
 	"strconv"
 )
 
@@ -21,17 +21,26 @@ type Cache struct {
 func cacheCreateObjKey(obj string) func() string {
 	counter := 0
 	return func() string {
+		godbc.Require(counter >= 0)
+
 		counter += 1
 		return strconv.Itoa(counter)
 	}
 }
 
 func NewCache(cachesize uint64, writethrough bool) *Cache {
+
+	godbc.Require(cachesize > 0)
+
 	cache := &Cache{}
 	cache.cachesize = cachesize
 	cache.writethrough = writethrough
 	cache.cacheobjids = make(map[string]string)
 	cache.cachemap = make(map[string]int)
+
+	godbc.Ensure(cache.cacheobjids != nil)
+	godbc.Ensure(cache.cachemap != nil)
+	godbc.Ensure(cache.cachesize > 0)
 
 	return cache
 }
