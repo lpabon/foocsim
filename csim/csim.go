@@ -35,6 +35,7 @@ var fdeletion_percent = flag.Int("deletions", 15, "% of File deletions")
 var fread_percent = flag.Int("reads", 65, "% of Reads")
 var fwritethrough = flag.Bool("writethrough", true, "Writethrough or read miss")
 var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "Use a Zipf or Random distribution")
+var fdataperiod = flag.Int("dataperiod", 1000, "Number of IOs per data collected")
 
 func main() {
 
@@ -42,6 +43,12 @@ func main() {
 
 	// Parse flags
 	flag.Parse()
+
+	// Check parameters
+	godbc.Check(*fchunksize > 0, "chunksize must be greater than 0")
+	godbc.Check(*fmaxfilesize > 0, "maxfilesize must be greater than 0")
+	godbc.Check(0 <= (*fread_percent) && (*fread_percent) <= 100, "reads must be between 0 and 100")
+	godbc.Check(0 <= (*fdeletion_percent) && (*fdeletion_percent) <= 100, "deletions must be between 0 and 100")
 
 	// Setup seed for random numbers
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -51,10 +58,6 @@ func main() {
 	maxfilesize := (int64(MB) * (*fmaxfilesize)) / int64(chunksize) // Up to 1 TB in 256k chunks
 	cachesize := (uint64(GB) * (*fcachesize)) / uint64(chunksize)   // 16 GB divided into 256k chunks
 	numfiles := *fnumfiles
-	numios := *fnumios
-	deletion_chance := *fdeletion_percent // percent
-	read_chance := *fread_percent         // percent
-	writethrough := *fwritethrough
 	filedistribution_zipf := *ffiledistribution_zipf
 
 	// Determine distribution type
@@ -67,7 +70,7 @@ func main() {
 	for file := 0; file < numfiles; file++ {
 		files[file] = &SimFile{}
 		files[file].size = uint64(r.Int63n(maxfilesize)) + uint64(1) // in case we get 0
-		files[file].iogen = zipfworkload.NewZipfWorkload(files[file].size, read_chance)
+		files[file].iogen = zipfworkload.NewZipfWorkload(files[file].size, (*fread_percent))
 	}
 
 	// Print here Simulation information, also Mean file size and std deviation
@@ -79,13 +82,13 @@ func main() {
 	metrics := bufio.NewWriter(fp)
 
 	// Create the cache
-	cache := caches.NewCache(cachesize, writethrough)
+	cache := caches.NewCache(cachesize, (*fwritethrough))
 	cache_prev := cache.Copy()
 
-	for io := 0; io < numios; io++ {
+	for io := 0; io < (*fnumios); io++ {
 
 		// Save metrics
-		if (io % 100) == 0 {
+		if (io % (*fdataperiod)) == 0 {
 			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + cache.DumpDelta(cache_prev))
 			godbc.Check(err == nil)
 
@@ -104,7 +107,7 @@ func main() {
 		godbc.Check(int(file) <= numfiles, fmt.Sprintf("file = %v", file))
 
 		// Check if we need to delete this file
-		if rand.Intn(100) < deletion_chance {
+		if rand.Intn(100) < (*fdeletion_percent) {
 			cache.Delete(strconv.FormatUint(file, 10))
 			continue
 		}
