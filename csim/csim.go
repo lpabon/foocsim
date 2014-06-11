@@ -4,6 +4,7 @@ import (
 	"bitbucket.org/lpabon/filecc/caches"
 	"bitbucket.org/lpabon/filecc/zipfworkload"
 	"bufio"
+	"flag"
 	"fmt"
 	"github.com/lpabon/godbc"
 	"math/rand"
@@ -12,28 +13,49 @@ import (
 	"time"
 )
 
+const (
+	KB = 1024
+	MB = 1024 * 1024
+	GB = 1024 * 1024 * 1024
+	TB = 1024 * 1024 * 1024 * 1024
+)
+
 type SimFile struct {
 	iogen *zipfworkload.ZipfWorkload
 	size  uint64
 }
 
+// Command line
+var fchunksize = flag.Int("chunksize", 256, "Chunk size in KB. Default 256 KB")
+var fmaxfilesize = flag.Int64("maxfilesize", 1*1024*1024, "Maximum file size MB. Default 1 TB")
+var fcachesize = flag.Uint64("cachesize", 64, "Cache size in GB. Default 8 GB")
+var fnumfiles = flag.Int("numfiles", 100000, "Number of files")
+var fnumios = flag.Int("ios", 5000000, "Number of IOs")
+var fdeletion_percent = flag.Int("deletions", 15, "% of File deletions")
+var fread_percent = flag.Int("reads", 65, "% of Reads")
+var fwritethrough = flag.Bool("writethrough", true, "Writethrough or read miss")
+var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "Use a Zipf or Random distribution")
+
 func main() {
 
 	var filezipf *zipfworkload.ZipfWorkload
+
+	// Parse flags
+	flag.Parse()
 
 	// Setup seed for random numbers
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Config
-	chunksize := 256 * 1024
-	maxfilesize := int64(1*1024*1024*1024*1024) / int64(chunksize) // Up to 1 TB in 256k chunks
-	cachesize := uint64(64*1024*1024*1024) / uint64(chunksize)     // 16 GB divided into 256k chunks
-	numfiles := 100000
-	numios := 5000000
-	deletion_chance := 15 // percent
-	read_chance := 65     // percent
-	writethrough := true
-	filedistribution_zipf := true
+	chunksize := *fchunksize * KB
+	maxfilesize := (int64(MB) * (*fmaxfilesize)) / int64(chunksize) // Up to 1 TB in 256k chunks
+	cachesize := (uint64(GB) * (*fcachesize)) / uint64(chunksize)   // 16 GB divided into 256k chunks
+	numfiles := *fnumfiles
+	numios := *fnumios
+	deletion_chance := *fdeletion_percent // percent
+	read_chance := *fread_percent         // percent
+	writethrough := *fwritethrough
+	filedistribution_zipf := *ffiledistribution_zipf
 
 	// Determine distribution type
 	if filedistribution_zipf {
