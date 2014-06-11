@@ -185,7 +185,8 @@ func (c *Cache) WriteHitRateDelta(prev *Cache) float64 {
 
 func (c *Cache) String() string {
 	return fmt.Sprintf(
-		"Cache Information:\n"+
+		"== Cache Information ==\n"+
+			"Cache Utilization: %v\n"+
 			"Read Hit Rate: %v\n"+
 			"Write Hit Rate: %v\n"+
 			"Read hits: %d\n"+
@@ -197,6 +198,7 @@ func (c *Cache) String() string {
 			"Insertions: %d\n"+
 			"Evictions: %d\n"+
 			"Invalidations: %d\n",
+		float64(len(c.cachemap))/float64(c.cachesize),
 		c.ReadHitRate(),
 		c.WriteHitRate(),
 		c.readhits,
