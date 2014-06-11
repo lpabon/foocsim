@@ -83,3 +83,35 @@ func TestEvict(t *testing.T) {
 	_, ok = c.cachemap["thisonestays"]
 	assert.False(t, ok)
 }
+
+func TestInsert(t *testing.T) {
+	c := NewCache(2, true)
+
+	assert.Equal(t, 0, c.insertions)
+	assert.Equal(t, 0, c.evictions)
+
+	c.Insert("a")
+	assert.Equal(t, 1, c.insertions)
+	assert.Equal(t, 0, c.evictions)
+	_, ok := c.cachemap["a"]
+	assert.True(t, ok)
+
+	c.Insert("b")
+	assert.Equal(t, 2, c.insertions)
+	assert.Equal(t, 0, c.evictions)
+	_, ok = c.cachemap["a"]
+	assert.True(t, ok)
+	_, ok = c.cachemap["b"]
+	assert.True(t, ok)
+
+	c.Insert("c")
+	assert.Equal(t, 3, c.insertions)
+	assert.Equal(t, 1, c.evictions)
+	_, ok = c.cachemap["a"]
+	assert.False(t, ok)
+	_, ok = c.cachemap["b"]
+	assert.True(t, ok)
+	_, ok = c.cachemap["c"]
+	assert.True(t, ok)
+
+}

@@ -94,7 +94,7 @@ func (c *Cache) Evict() {
 func (c *Cache) Insert(chunkkey string) {
 	c.insertions++
 
-	if uint64(len(c.cachemap)) > c.cachesize {
+	if uint64(len(c.cachemap)) >= c.cachesize {
 		c.Evict()
 	}
 
