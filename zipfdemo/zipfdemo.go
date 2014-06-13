@@ -16,9 +16,9 @@
 package main
 
 import (
-	"bitbucket.org/lpabon/filecc/zipfworkload"
 	"bufio"
 	"fmt"
+	"github.com/lpabon/foocsim/zipfworkload"
 	"github.com/lpabon/godbc"
 	"os"
 )

@@ -16,11 +16,11 @@
 package main
 
 import (
-	"bitbucket.org/lpabon/filecc/caches"
-	"bitbucket.org/lpabon/filecc/zipfworkload"
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/lpabon/foocsim/caches"
+	"github.com/lpabon/foocsim/zipfworkload"
 	"github.com/lpabon/godbc"
 	"math/rand"
 	"os"
