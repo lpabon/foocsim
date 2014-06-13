@@ -39,6 +39,20 @@ Invalidations: 1229271
 $ ./fooplot.gp
 ```
 
+### Example Plots
+
+![deletes](images/cache_deletes.png)
+
+![readhitrate](images/cache_readhitrate.png)
+
+![writehitrate](images/cache_writehitrate.png)
+
+![evictions](images/cache_evictions.png)
+
+![reads](images/cache_reads.png)
+
+![writes](images/cache_writes.png)
+
 ## Help
 
 ```
