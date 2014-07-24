@@ -31,6 +31,7 @@ type Cache struct {
 	evictions, invalidations int
 	insertions               int
 	writethrough             bool
+	stats                    CacheStats
 }
 
 func cacheCreateObjKey(obj string) func() string {
@@ -43,7 +44,7 @@ func cacheCreateObjKey(obj string) func() string {
 	}
 }
 
-func NewCache(cachesize uint64, writethrough bool) *Cache {
+func NewSimpleCache(cachesize uint64, writethrough bool) *Cache {
 
 	godbc.Require(cachesize > 0)
 
@@ -70,23 +71,16 @@ func (c *Cache) getObjKey(obj string) string {
 	}
 }
 
-func (c *Cache) Copy() *Cache {
-	cachecopy := &Cache{}
-	*cachecopy = *c
-
-	return cachecopy
-}
-
 func (c *Cache) Invalidate(chunkkey string) {
 	if _, ok := c.cachemap[chunkkey]; ok {
-		c.writehits++
-		c.invalidations++
+		c.stats.writehits++
+		c.stats.invalidations++
 		delete(c.cachemap, chunkkey)
 	}
 }
 
 func (c *Cache) Evict() {
-	c.evictions++
+	c.stats.evictions++
 
 	// BIG ASSUMPTION! I have no idea
 	// if Go keeps track of the iteration
@@ -107,7 +101,7 @@ func (c *Cache) Evict() {
 }
 
 func (c *Cache) Insert(chunkkey string) {
-	c.insertions++
+	c.stats.insertions++
 
 	if uint64(len(c.cachemap)) >= c.cachesize {
 		c.Evict()
@@ -117,7 +111,7 @@ func (c *Cache) Insert(chunkkey string) {
 }
 
 func (c *Cache) Write(obj string, chunk string) {
-	c.writes++
+	c.stats.writes++
 
 	key := c.getObjKey(obj) + chunk
 
@@ -133,13 +127,13 @@ func (c *Cache) Write(obj string, chunk string) {
 }
 
 func (c *Cache) Read(obj, chunk string) {
-	c.reads++
+	c.stats.reads++
 
 	key := c.getObjKey(obj) + chunk
 
 	if _, ok := c.cachemap[key]; ok {
 		// Read Hit
-		c.readhits++
+		c.stats.readhits++
 
 		// Clock Algorithm: Set that we looked
 		// at it
@@ -152,131 +146,22 @@ func (c *Cache) Read(obj, chunk string) {
 }
 
 func (c *Cache) Delete(obj string) {
-	c.deletions++
+	c.stats.deletions++
 
 	if _, ok := c.cacheobjids[obj]; ok {
-		c.deletionhits++
+		c.stats.deletionhits++
 		delete(c.cacheobjids, obj)
 	}
-}
-
-func (c *Cache) ReadHitRate() float64 {
-	if c.reads == 0 {
-		return 0.0
-	} else {
-		return float64(c.readhits) / float64(c.reads)
-	}
-}
-
-func (c *Cache) WriteHitRate() float64 {
-	if c.writes == 0 {
-		return 0.0
-	} else {
-		return float64(c.writehits) / float64(c.writes)
-	}
-
-}
-
-func (c *Cache) ReadHitRateDelta(prev *Cache) float64 {
-	reads := c.reads - prev.reads
-	readhits := c.readhits - prev.readhits
-	if reads == 0 {
-		return 0.0
-	} else {
-		return float64(readhits) / float64(reads)
-	}
-}
-
-func (c *Cache) WriteHitRateDelta(prev *Cache) float64 {
-	writes := c.writes - prev.writes
-	writehits := c.writehits - prev.writehits
-	if writes == 0 {
-		return 0.0
-	} else {
-		return float64(writehits) / float64(writes)
-	}
-
 }
 
 func (c *Cache) String() string {
 	return fmt.Sprintf(
 		"== Cache Information ==\n"+
-			"Cache Utilization: %v\n"+
-			"Read Hit Rate: %v\n"+
-			"Write Hit Rate: %v\n"+
-			"Read hits: %d\n"+
-			"Write hits: %d\n"+
-			"Delete hits: %d\n"+
-			"Reads: %d\n"+
-			"Writes: %d\n"+
-			"Deletions: %d\n"+
-			"Insertions: %d\n"+
-			"Evictions: %d\n"+
-			"Invalidations: %d\n",
-		float64(len(c.cachemap))/float64(c.cachesize),
-		c.ReadHitRate(),
-		c.WriteHitRate(),
-		c.readhits,
-		c.writehits,
-		c.deletionhits,
-		c.reads,
-		c.writes,
-		c.deletions,
-		c.insertions,
-		c.evictions,
-		c.invalidations)
+			"Cache Utilization: %v\n",
+		float64(len(c.cachemap))/float64(c.cachesize)) +
+		c.stats.String()
 }
 
-func (c *Cache) Dump() string {
-	return fmt.Sprintf(
-		"%v,"+ // Read Hit Rate 1
-			"%v,"+ // Write Hit Rate 2
-			"%d,"+ // Read Hits 3
-			"%d,"+ // Write Hits 4
-			"%d,"+ // Deletion Hits 5
-			"%d,"+ // Reads 6
-			"%d,"+ // Writes 7
-			"%d,"+ // Deletions 8
-			"%d,"+ // Insertions 9
-			"%d,"+ // Evictions 10
-			"%d\n", // Invalidations 11
-		c.ReadHitRate(),
-		c.WriteHitRate(),
-		c.readhits,
-		c.writehits,
-		c.deletionhits,
-		c.reads,
-		c.writes,
-		c.deletions,
-		c.insertions,
-		c.evictions,
-		c.invalidations)
-
-}
-
-func (c *Cache) DumpDelta(prev *Cache) string {
-	return fmt.Sprintf(
-		"%v,"+ // Read Hit Rate 1
-			"%v,"+ // Write Hit Rate 2
-			"%d,"+ // Read Hits 3
-			"%d,"+ // Write Hits 4
-			"%d,"+ // Deletion Hits 5
-			"%d,"+ // Reads 6
-			"%d,"+ // Writes 7
-			"%d,"+ // Deletions 8
-			"%d,"+ // Insertions 9
-			"%d,"+ // Evictions 10
-			"%d\n", // Invalidations 11
-		c.ReadHitRateDelta(prev),
-		c.WriteHitRateDelta(prev),
-		c.readhits-prev.readhits,
-		c.writehits-prev.writehits,
-		c.deletionhits-prev.deletionhits,
-		c.reads-prev.reads,
-		c.writes-prev.writes,
-		c.deletions-prev.deletions,
-		c.insertions-prev.insertions,
-		c.evictions-prev.evictions,
-		c.invalidations-prev.invalidations)
-
+func (c *Cache) Stats() *CacheStats {
+	return c.stats.Copy()
 }

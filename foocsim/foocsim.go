@@ -97,18 +97,19 @@ func main() {
 	metrics := bufio.NewWriter(fp)
 
 	// Create the cache
-	cache := caches.NewCache(cachesize, (*fwritethrough))
-	cache_prev := cache.Copy()
+	cache := caches.NewSimpleCache(cachesize, (*fwritethrough))
+	prev_stats := cache.Stats()
 
 	for io := 0; io < (*fnumios); io++ {
 
 		// Save metrics
 		if (io % (*fdataperiod)) == 0 {
-			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + cache.DumpDelta(cache_prev))
+			stats := cache.Stats()
+			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + stats.DumpDelta(prev_stats))
 			godbc.Check(err == nil)
 
 			// Now copy the data
-			*cache_prev = *cache
+			prev_stats = stats
 		}
 
 		// Get the file
@@ -136,5 +137,5 @@ func main() {
 		}
 	}
 	metrics.Flush()
-	fmt.Print(cache)
+	fmt.Print(cache.Stats())
 }
