@@ -22,16 +22,11 @@ import (
 )
 
 type Cache struct {
-	cacheobjids              map[string]string
-	cachemap                 map[string]int
-	cachesize                uint64
-	readhits, writehits      int
-	reads, writes            int
-	deletions, deletionhits  int
-	evictions, invalidations int
-	insertions               int
-	writethrough             bool
-	stats                    CacheStats
+	cacheobjids  map[string]string
+	cachemap     map[string]int
+	cachesize    uint64
+	writethrough bool
+	stats        CacheStats
 }
 
 func cacheCreateObjKey(obj string) func() string {
