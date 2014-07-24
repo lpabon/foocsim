@@ -21,7 +21,7 @@ import (
 	"strconv"
 )
 
-type Cache struct {
+type SimpleCache struct {
 	cacheobjids  map[string]string
 	cachemap     map[string]int
 	cachesize    uint64
@@ -56,7 +56,7 @@ func NewSimpleCache(cachesize uint64, writethrough bool) *Cache {
 	return cache
 }
 
-func (c *Cache) getObjKey(obj string) string {
+func (c *SimpleCache) getObjKey(obj string) string {
 	if val, ok := c.cacheobjids[obj]; ok {
 		return val
 	} else {
@@ -66,7 +66,7 @@ func (c *Cache) getObjKey(obj string) string {
 	}
 }
 
-func (c *Cache) Invalidate(chunkkey string) {
+func (c *SimpleCache) Invalidate(chunkkey string) {
 	if _, ok := c.cachemap[chunkkey]; ok {
 		c.stats.writehits++
 		c.stats.invalidations++
@@ -74,7 +74,7 @@ func (c *Cache) Invalidate(chunkkey string) {
 	}
 }
 
-func (c *Cache) Evict() {
+func (c *SimpleCache) Evict() {
 	c.stats.evictions++
 
 	// BIG ASSUMPTION! I have no idea
@@ -95,7 +95,7 @@ func (c *Cache) Evict() {
 	}
 }
 
-func (c *Cache) Insert(chunkkey string) {
+func (c *SimpleCache) Insert(chunkkey string) {
 	c.stats.insertions++
 
 	if uint64(len(c.cachemap)) >= c.cachesize {
@@ -105,7 +105,7 @@ func (c *Cache) Insert(chunkkey string) {
 	c.cachemap[chunkkey] = 1
 }
 
-func (c *Cache) Write(obj string, chunk string) {
+func (c *SimpleCache) Write(obj string, chunk string) {
 	c.stats.writes++
 
 	key := c.getObjKey(obj) + chunk
@@ -121,7 +121,7 @@ func (c *Cache) Write(obj string, chunk string) {
 	}
 }
 
-func (c *Cache) Read(obj, chunk string) {
+func (c *SimpleCache) Read(obj, chunk string) {
 	c.stats.reads++
 
 	key := c.getObjKey(obj) + chunk
@@ -140,7 +140,7 @@ func (c *Cache) Read(obj, chunk string) {
 	}
 }
 
-func (c *Cache) Delete(obj string) {
+func (c *SimpleCache) Delete(obj string) {
 	c.stats.deletions++
 
 	if _, ok := c.cacheobjids[obj]; ok {
@@ -149,7 +149,7 @@ func (c *Cache) Delete(obj string) {
 	}
 }
 
-func (c *Cache) String() string {
+func (c *SimpleCache) String() string {
 	return fmt.Sprintf(
 		"== Cache Information ==\n"+
 			"Cache Utilization: %v\n",
@@ -157,6 +157,6 @@ func (c *Cache) String() string {
 		c.stats.String()
 }
 
-func (c *Cache) Stats() *CacheStats {
+func (c *SimpleCache) Stats() *CacheStats {
 	return c.stats.Copy()
 }
