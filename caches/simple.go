@@ -39,11 +39,11 @@ func cacheCreateObjKey(obj string) func() string {
 	}
 }
 
-func NewSimpleCache(cachesize uint64, writethrough bool) *Cache {
+func NewSimpleCache(cachesize uint64, writethrough bool) *SimpleCache {
 
 	godbc.Require(cachesize > 0)
 
-	cache := &Cache{}
+	cache := &SimpleCache{}
 	cache.cachesize = cachesize
 	cache.writethrough = writethrough
 	cache.cacheobjids = make(map[string]string)
