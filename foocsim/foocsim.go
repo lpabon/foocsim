@@ -97,7 +97,8 @@ func main() {
 	metrics := bufio.NewWriter(fp)
 
 	// Create the cache
-	cache := caches.NewSimpleCache(cachesize, (*fwritethrough))
+	var cache caches.Caches
+	cache = caches.NewSimpleCache(cachesize, (*fwritethrough))
 	prev_stats := cache.Stats()
 
 	for io := 0; io < (*fnumios); io++ {
