@@ -74,8 +74,8 @@ func (c *CacheStats) Copy() *CacheStats {
 
 func (c *CacheStats) String() string {
 	return fmt.Sprintf(
-		"Read Hit Rate: %v\n"+
-			"Write Hit Rate: %v\n"+
+		"Read Hit Rate: %.4f\n"+
+			"Write Hit Rate: %.4f\n"+
 			"Read hits: %d\n"+
 			"Write hits: %d\n"+
 			"Delete hits: %d\n"+

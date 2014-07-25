@@ -150,5 +150,5 @@ func main() {
 		}
 	}
 	metrics.Flush()
-	fmt.Print(cache.Stats())
+	fmt.Print(cache)
 }

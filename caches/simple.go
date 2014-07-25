@@ -152,8 +152,8 @@ func (c *SimpleCache) Delete(obj string) {
 func (c *SimpleCache) String() string {
 	return fmt.Sprintf(
 		"== Cache Information ==\n"+
-			"Cache Utilization: %v\n",
-		float64(len(c.cachemap))/float64(c.cachesize)) +
+			"Cache Utilization: %.2f %%\n",
+		float64(len(c.cachemap))/float64(c.cachesize)*100.0) +
 		c.stats.String()
 }
 
