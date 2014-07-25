@@ -18,18 +18,18 @@ $ go get github.com/lpabon/godbc
 $ cd $GOPATH/src/github.com/lpabon/foocsim/foocsim
 $ go run foocsim.go
 == Cache Information ==
-Cache Utilization: 1
-Read Hit Rate: 0.8255917615066246
-Write Hit Rate: 0.825938701848781
-Read hits: 2280012
-Write hits: 1229271
-Delete hits: 624538
-Reads: 2761670
-Writes: 1488332
-Deletions: 749998
-Insertions: 1969990
-Evictions: 478575
-Invalidations: 1229271
+Cache Utilization: 100.00 %
+Read Hit Rate: 0.8447
+Write Hit Rate: 0.8451
+Read hits: 2028005
+Write hits: 1350885
+Delete hits: 2375962
+Reads: 2400906
+Writes: 1598558
+Deletions: 6000536
+Insertions: 1971459
+Evictions: 358430
+Invalidations: 1350885
 ```
 
 * The simulation created a file called `cache.data`
