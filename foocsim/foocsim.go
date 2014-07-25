@@ -30,9 +30,9 @@ import (
 
 const (
 	KB = 1024
-	MB = 1024 * 1024
-	GB = 1024 * 1024 * 1024
-	TB = 1024 * 1024 * 1024 * 1024
+	MB = 1024 * KB
+	GB = 1024 * MB
+	TB = 1024 * GB
 )
 
 type SimFile struct {
@@ -51,6 +51,7 @@ var fread_percent = flag.Int("reads", 65, "% of Reads")
 var fwritethrough = flag.Bool("writethrough", true, "Writethrough or read miss")
 var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "Use a Zipf or Random distribution")
 var fdataperiod = flag.Int("dataperiod", 1000, "Number of IOs per data collected")
+var fcachetype = flag.String("cachetype", "simple", "Cache type to use.  Current caches: simple, null")
 
 func main() {
 
@@ -98,9 +99,20 @@ func main() {
 
 	// Create the cache
 	var cache caches.Caches
-	cache = caches.NewSimpleCache(cachesize, (*fwritethrough))
+	switch *fcachetype {
+	case "simple":
+		cache = caches.NewSimpleCache(cachesize, (*fwritethrough))
+	case "null":
+		cache = caches.NewNullCache()
+	default:
+		fmt.Printf("ERROR: Unknown cachetype: %s\n", *fcachetype)
+		return
+	}
+
+	// Initialize the stats used for delta calculations
 	prev_stats := cache.Stats()
 
+	// Begin the simulation
 	for io := 0; io < (*fnumios); io++ {
 
 		// Save metrics
