@@ -59,6 +59,7 @@ $ ./fooplot.gp
 $ go run foocsim.go -help
 Usage of foocsim:
   -cachesize=64: Cache size in GB. Default 8 GB
+  -cachetype="simple": Cache type to use.  Current caches: simple, null
   -chunksize=256: Chunk size in KB. Default 256 KB
   -dataperiod=1000: Number of IOs per data collected
   -deletions=15: % of File deletions
