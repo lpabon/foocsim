@@ -41,17 +41,20 @@ type SimFile struct {
 }
 
 // Command line
-var fchunksize = flag.Int("chunksize", 256, "Chunk size in KB. Default 256 KB")
-var fmaxfilesize = flag.Int64("maxfilesize", 1*1024*1024, "Maximum file size MB. Default 1 TB")
-var fcachesize = flag.Uint64("cachesize", 64, "Cache size in GB. Default 8 GB")
-var fnumfiles = flag.Int("numfiles", 100000, "Number of files")
-var fnumios = flag.Int("ios", 5000000, "Number of IOs")
-var fdeletion_percent = flag.Int("deletions", 15, "% of File deletions")
-var fread_percent = flag.Int("reads", 65, "% of Reads")
-var fwritethrough = flag.Bool("writethrough", true, "Writethrough or read miss")
-var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "Use a Zipf or Random distribution")
-var fdataperiod = flag.Int("dataperiod", 1000, "Number of IOs per data collected")
-var fcachetype = flag.String("cachetype", "simple", "Cache type to use.  Current caches: simple, null")
+var fchunksize = flag.Int("chunksize", 256, "\n\tChunk size in KB. Default 256 KB")
+var fmaxfilesize = flag.Int64("maxfilesize", 1*MB, "\n\tMaximum file size MB. Default 1 TB")
+var frandomfilesize = flag.Bool("randomfilesize", true,
+	"\n\tCreate files of random size with a maximum of maxfilesize."+
+		"\n\tIf false, set the file size exactly to maxfilesize. Default true")
+var fcachesize = flag.Uint64("cachesize", 64, "\n\tCache size in GB. Default 8 GB")
+var fnumfiles = flag.Int("numfiles", 100000, "\n\tNumber of files")
+var fnumios = flag.Int("ios", 5000000, "\n\tNumber of IOs")
+var fdeletion_percent = flag.Int("deletions", 15, "\n\t% of File deletions")
+var fread_percent = flag.Int("reads", 65, "\n\t% of Reads")
+var fwritethrough = flag.Bool("writethrough", true, "\n\tWritethrough or read miss")
+var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "\n\tUse a Zipf or Random distribution")
+var fdataperiod = flag.Int("dataperiod", 1000, "\n\tNumber of IOs per data collected")
+var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use.  Current caches: simple, null")
 
 func main() {
 
@@ -85,7 +88,11 @@ func main() {
 	files := make([]*SimFile, numfiles)
 	for file := 0; file < numfiles; file++ {
 		files[file] = &SimFile{}
-		files[file].size = uint64(r.Int63n(maxfilesize)) + uint64(1) // in case we get 0
+		if *frandomfilesize {
+			files[file].size = uint64(r.Int63n(maxfilesize)) + uint64(1) // in case we get 0
+		} else {
+			files[file].size = uint64(maxfilesize)
+		}
 		files[file].iogen = zipfworkload.NewZipfWorkload(files[file].size, (*fread_percent))
 	}
 
