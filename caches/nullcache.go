@@ -27,6 +27,10 @@ func NewNullCache() *NullCache {
 	return &NullCache{}
 }
 
+func (n *NullCache) Close() {
+
+}
+
 func (c *NullCache) Invalidate(chunkkey string) {
 }
 

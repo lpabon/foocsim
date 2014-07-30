@@ -66,6 +66,10 @@ func (c *SimpleCache) getObjKey(obj string) string {
 	}
 }
 
+func (s *SimpleCache) Close() {
+
+}
+
 func (c *SimpleCache) Invalidate(chunkkey string) {
 	if _, ok := c.cachemap[chunkkey]; ok {
 		c.stats.writehits++

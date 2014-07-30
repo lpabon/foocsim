@@ -54,7 +54,7 @@ var fread_percent = flag.Int("reads", 65, "\n\t% of Reads")
 var fwritethrough = flag.Bool("writethrough", true, "\n\tWritethrough or read miss")
 var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "\n\tUse a Zipf or Random distribution")
 var fdataperiod = flag.Int("dataperiod", 1000, "\n\tNumber of IOs per data collected")
-var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use.  Current caches: simple, null")
+var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use.  Current caches: simple, null, boltdb")
 
 func main() {
 
@@ -111,6 +111,8 @@ func main() {
 		cache = caches.NewSimpleCache(cachesize, (*fwritethrough))
 	case "null":
 		cache = caches.NewNullCache()
+	case "boltdb":
+		cache = caches.NewBoltDBCache(cachesize, (*fwritethrough))
 	default:
 		fmt.Printf("ERROR: Unknown cachetype: %s\n", *fcachetype)
 		return
@@ -158,4 +160,5 @@ func main() {
 	}
 	metrics.Flush()
 	fmt.Print(cache)
+	cache.Close()
 }
