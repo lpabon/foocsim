@@ -45,6 +45,7 @@ func NewBoltDBCache(cachesize uint64, writethrough bool) *BoltDBCache {
 	bdc.buckets = make(map[string]int)
 	bdc.writethrough = writethrough
 	bdc.cachesize = cachesize
+
 	os.Remove("cache.db")
 	bdc.db, err = bolt.Open("cache.db", 0600, nil)
 	godbc.Check(err == nil)
@@ -57,47 +58,61 @@ func NewBoltDBCache(cachesize uint64, writethrough bool) *BoltDBCache {
 
 func (c *BoltDBCache) boltput(bucket string, key string, val []byte) (err error) {
 	err = c.db.Update(func(tx *bolt.Tx) error {
+
 		b := tx.Bucket([]byte(bucket))
-		if nil == b {
-			b, _ = tx.CreateBucket([]byte(bucket))
+		if b == nil {
+			b, err = tx.CreateBucket([]byte(bucket))
+			if err != nil {
+				return err
+			}
 			c.buckets[bucket] = 1
 		}
 		return b.Put([]byte(key), val)
+
 	})
-	c.keyn++
-	return
+
+	if err == nil {
+		c.keyn++
+	}
+
+	return err
 }
 
 func (c *BoltDBCache) boltget(bucket string, key string) (val []byte, err error) {
 	err = c.db.View(func(tx *bolt.Tx) error {
+
 		b := tx.Bucket([]byte(bucket))
-		if nil == b {
+		if b == nil {
 			val = nil
-			return ErrKeyMissing
+			err = ErrKeyMissing
+			return err
 		}
 		val = b.Get([]byte(key))
 		return nil
 	})
+
 	if nil == val {
 		err = ErrKeyMissing
 	}
+
 	return
 }
 
 func (c *BoltDBCache) boltdelete(bucket string, key string) (err error) {
 	err = c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucket))
-		if nil == b {
-			return nil
-		}
-		return b.Delete([]byte(key))
+		return tx.Bucket([]byte(bucket)).Delete([]byte(key))
 	})
-	c.keyn--
+
+	if err == nil {
+		c.keyn--
+	}
+
 	return
 }
 
 func (c *BoltDBCache) Close() {
 	c.db.Close()
+	os.Remove("cache.db")
 }
 
 func (c *BoltDBCache) Invalidate(obj, chunk string) {
@@ -112,12 +127,10 @@ func (c *BoltDBCache) Invalidate(obj, chunk string) {
 func (c *BoltDBCache) Evict() {
 	c.stats.evictions++
 
-	// BIG ASSUMPTION! I have no idea
-	// if Go keeps track of the iteration
-	// through a map
 	for evicted := false; !evicted; {
 		for bucket, _ := range c.buckets {
 			c.db.Update(func(tx *bolt.Tx) error {
+
 				b := tx.Bucket([]byte(bucket))
 				c := b.Cursor()
 
@@ -132,6 +145,7 @@ func (c *BoltDBCache) Evict() {
 				}
 
 				return nil
+
 			})
 		}
 	}

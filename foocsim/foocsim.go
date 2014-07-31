@@ -118,6 +118,7 @@ func main() {
 		fmt.Printf("ERROR: Unknown cachetype: %s\n", *fcachetype)
 		return
 	}
+	defer cache.Close()
 
 	// Initialize the stats used for delta calculations
 	prev_stats := cache.Stats()
@@ -163,5 +164,4 @@ func main() {
 	}
 	metrics.Flush()
 	fmt.Print(cache)
-	cache.Close()
 }
