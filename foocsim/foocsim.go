@@ -24,6 +24,7 @@ import (
 	"github.com/lpabon/godbc"
 	"math/rand"
 	"os"
+	"runtime/pprof"
 	"strconv"
 	"time"
 )
@@ -120,7 +121,9 @@ func main() {
 
 	// Initialize the stats used for delta calculations
 	prev_stats := cache.Stats()
-
+	f, _ := os.Create("cpuprofile")
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 	// Begin the simulation
 	for io := 0; io < (*fnumios); io++ {
 

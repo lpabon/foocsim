@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/lpabon/godbc"
+	"os"
 )
 
 var valueset = []byte{1}
@@ -36,11 +37,20 @@ type BoltDBCache struct {
 }
 
 func NewBoltDBCache(cachesize uint64, writethrough bool) *BoltDBCache {
+
+	godbc.Require(cachesize > 0)
+
 	var err error
 	bdc := &BoltDBCache{}
 	bdc.buckets = make(map[string]int)
+	bdc.writethrough = writethrough
+	bdc.cachesize = cachesize
+	os.Remove("cache.db")
 	bdc.db, err = bolt.Open("cache.db", 0600, nil)
 	godbc.Check(err == nil)
+
+	godbc.Ensure(bdc.buckets != nil)
+	godbc.Ensure(bdc.cachesize > 0)
 
 	return bdc
 }
@@ -62,11 +72,15 @@ func (c *BoltDBCache) boltget(bucket string, key string) (val []byte, err error)
 	err = c.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		if nil == b {
+			val = nil
 			return ErrKeyMissing
 		}
 		val = b.Get([]byte(key))
 		return nil
 	})
+	if nil == val {
+		err = ErrKeyMissing
+	}
 	return
 }
 
@@ -87,7 +101,7 @@ func (c *BoltDBCache) Close() {
 }
 
 func (c *BoltDBCache) Invalidate(obj, chunk string) {
-	if _, err := c.boltget(obj, chunk); err == nil {
+	if v, _ := c.boltget(obj, chunk); v != nil {
 		c.stats.writehits++
 		c.stats.invalidations++
 
@@ -101,7 +115,7 @@ func (c *BoltDBCache) Evict() {
 	// BIG ASSUMPTION! I have no idea
 	// if Go keeps track of the iteration
 	// through a map
-	for evicted := false; evicted; {
+	for evicted := false; !evicted; {
 		for bucket, _ := range c.buckets {
 			c.db.Update(func(tx *bolt.Tx) error {
 				b := tx.Bucket([]byte(bucket))
@@ -150,7 +164,7 @@ func (c *BoltDBCache) Write(obj string, chunk string) {
 func (c *BoltDBCache) Read(obj, chunk string) {
 	c.stats.reads++
 
-	if _, err := c.boltget(obj, chunk); err == nil {
+	if v, _ := c.boltget(obj, chunk); v != nil {
 		// Read Hit
 		c.stats.readhits++
 
