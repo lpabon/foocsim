@@ -16,6 +16,7 @@
 package caches
 
 import (
+	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/lpabon/godbc"
@@ -23,6 +24,7 @@ import (
 
 var valueset = []byte{1}
 var valueunset = []byte{0}
+var ErrKeyMissing = errors.New("No Key Found")
 
 type BoltDBCache struct {
 	stats        CacheStats
@@ -60,8 +62,7 @@ func (c *BoltDBCache) boltget(bucket string, key string) (val []byte, err error)
 	err = c.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		if nil == b {
-			b, _ = tx.CreateBucket([]byte(bucket))
-			c.buckets[bucket] = 1
+			return ErrKeyMissing
 		}
 		val = b.Get([]byte(key))
 		return nil
@@ -86,7 +87,7 @@ func (c *BoltDBCache) Close() {
 }
 
 func (c *BoltDBCache) Invalidate(obj, chunk string) {
-	if val, _ := c.boltget(obj, chunk); val != nil {
+	if _, err := c.boltget(obj, chunk); err == nil {
 		c.stats.writehits++
 		c.stats.invalidations++
 
@@ -149,7 +150,7 @@ func (c *BoltDBCache) Write(obj string, chunk string) {
 func (c *BoltDBCache) Read(obj, chunk string) {
 	c.stats.reads++
 
-	if val, _ := c.boltget(obj, chunk); val != nil {
+	if _, err := c.boltget(obj, chunk); err == nil {
 		// Read Hit
 		c.stats.readhits++
 
