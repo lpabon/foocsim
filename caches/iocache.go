@@ -23,6 +23,7 @@ import (
 /* -------------------------------------------------------- */
 type IoCacheBlockInfo struct {
 	key  string
+	mru  bool
 	used bool
 }
 
@@ -42,14 +43,20 @@ func NewIoCacheBlocks(cachesize uint64) *IoCacheBlocks {
 func (c *IoCacheBlocks) Insert(key string) (evictkey string, newindex uint64, err error) {
 	for {
 		for ; c.index < c.size; c.index++ {
-			if c.cacheblocks[c.index].used == true {
-				c.cacheblocks[c.index].used = false
+			if c.cacheblocks[c.index].mru {
+				c.cacheblocks[c.index].mru = false
 			} else {
-				evictkey = c.cacheblocks[c.index].key
+				if c.cacheblocks[c.index].used {
+					evictkey = c.cacheblocks[c.index].key
+				} else {
+					evictkey = ""
+				}
 				newindex = c.index
 				err = nil
 				c.cacheblocks[c.index].key = key
+				c.cacheblocks[c.index].mru = false
 				c.cacheblocks[c.index].used = true
+				c.index++
 				return
 			}
 		}
@@ -58,11 +65,13 @@ func (c *IoCacheBlocks) Insert(key string) (evictkey string, newindex uint64, er
 }
 
 func (c *IoCacheBlocks) Using(index uint64) {
-	c.cacheblocks[index].used = true
+	c.cacheblocks[index].mru = true
 }
 
 func (c *IoCacheBlocks) Free(index uint64) {
+	c.cacheblocks[index].mru = false
 	c.cacheblocks[index].used = false
+	c.cacheblocks[index].key = ""
 }
 
 /* -------------------------------------------------------- */
@@ -109,6 +118,7 @@ func (c *IoCache) Insert(key string) {
 
 	// Check for evictions
 	if evictkey != "" {
+		c.stats.evictions++
 		delete(c.cachemap, evictkey)
 	}
 
