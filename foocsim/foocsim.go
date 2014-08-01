@@ -56,7 +56,7 @@ var fwritethrough = flag.Bool("writethrough", true, "\n\tWritethrough or read mi
 var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "\n\tUse a Zipf or Random distribution")
 var fdataperiod = flag.Int("dataperiod", 1000, "\n\tNumber of IOs per data collected")
 var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use.\n\t"+
-	"Current caches: simple, null, boltdb, iocache")
+	"Current caches: simple, null, boltdb, iocache, leveldb")
 
 func main() {
 
@@ -117,6 +117,8 @@ func main() {
 		cache = caches.NewBoltDBCache(cachesize, (*fwritethrough))
 	case "iocache":
 		cache = caches.NewIoCache(cachesize, (*fwritethrough))
+	case "leveldb":
+		cache = caches.NewLevelDBCache(cachesize, (*fwritethrough))
 	default:
 		fmt.Printf("ERROR: Unknown cachetype: %s\n", *fcachetype)
 		return

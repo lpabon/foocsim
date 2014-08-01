@@ -23,9 +23,15 @@ import (
 	"os"
 )
 
-var valueset = []byte{1}
-var valueunset = []byte{0}
+var valueset []byte
+var valueunset []byte
 var ErrKeyMissing = errors.New("No Key Found")
+
+func init() {
+	valueset = make([]byte, 64)
+	valueunset = make([]byte, 64)
+	valueset[0] = 1
+}
 
 type BoltDBCache struct {
 	stats        CacheStats
@@ -210,7 +216,8 @@ func (c *BoltDBCache) Delete(obj string) {
 func (c *BoltDBCache) String() string {
 	return fmt.Sprintf(
 		"== Cache Information ==\n"+
-			"Cache Utilization: 0\n") +
+			"Cache Utilization: %.2f %%\n",
+		float64(c.keyn)/float64(c.cachesize)*100.0) +
 		c.stats.String() +
 		c.db.String()
 }
