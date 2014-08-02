@@ -46,6 +46,8 @@ func NewLevelDBCache(cachesize uint64, writethrough bool) *LevelDBCache {
 
 	var err error
 
+	godbc.Require(cachesize > 0)
+
 	db := &LevelDBCache{}
 	db.writethrough = writethrough
 	db.cachesize = cachesize
@@ -57,9 +59,9 @@ func NewLevelDBCache(cachesize uint64, writethrough bool) *LevelDBCache {
 
 	// Set Options
 	opts := levigo.NewOptions()
-	//opts.SetCache(levigo.NewLRUCache(3 << 30))
+	opts.SetCache(levigo.NewLRUCache(3 << 30))
 	opts.SetCreateIfMissing(true)
-	//opts.SetFilterPolicy(db.bloomf)
+	opts.SetFilterPolicy(db.bloomf)
 
 	db.db, err = levigo.Open("cache.leveldb", opts)
 	godbc.Check(err == nil)
@@ -105,6 +107,7 @@ func (c *LevelDBCache) Evict() {
 				c.db.Delete(c.wo, it.Key())
 				c.keyn--
 				evicted = true
+				break
 			}
 		}
 	}
