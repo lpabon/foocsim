@@ -22,110 +22,90 @@ import (
 	"os"
 )
 
-var leveldbvalset []byte
-var leveldbunvalset []byte
+var buf []byte
 
 func init() {
-	leveldbvalset = make([]byte, 64)
-	leveldbunvalset = make([]byte, 64)
-	leveldbvalset[0] = 1
+	buf = make([]byte, 4096)
 }
 
-type LevelDBCache struct {
+type IoCacheLevelDB struct {
 	stats        CacheStats
+	cachemap     map[string]uint64
+	cachesize    uint64
+	writethrough bool
+	cacheblocks  *IoCacheBlocks
 	db           *levigo.DB
 	ro           *levigo.ReadOptions
 	wo           *levigo.WriteOptions
-	bloomf       *levigo.FilterPolicy
-	cachesize    uint64
-	keyn         uint64
-	writethrough bool
 }
 
-func NewLevelDBCache(cachesize uint64, writethrough bool) *LevelDBCache {
+func NewIoCacheLevelDB(cachesize uint64, writethrough bool) *IoCacheLevelDB {
 
 	var err error
 
 	godbc.Require(cachesize > 0)
 
-	db := &LevelDBCache{}
-	db.writethrough = writethrough
-	db.cachesize = cachesize
+	cache := &IoCacheLevelDB{}
+	cache.cacheblocks = NewIoCacheBlocks(cachesize)
+	cache.cachemap = make(map[string]uint64)
+	cache.cachesize = cachesize
+	cache.writethrough = writethrough
 
 	os.RemoveAll("cache.leveldb")
-
-	// Set bloom filter
-	db.bloomf = levigo.NewBloomFilter(10)
 
 	// Set Options
 	opts := levigo.NewOptions()
 	opts.SetCache(levigo.NewLRUCache(3 << 30))
 	opts.SetCreateIfMissing(true)
-	opts.SetFilterPolicy(db.bloomf)
 
-	db.db, err = levigo.Open("cache.leveldb", opts)
+	cache.db, err = levigo.Open("cache.leveldb", opts)
 	godbc.Check(err == nil)
 
 	// Set read and write options
-	db.ro = levigo.NewReadOptions()
-	db.wo = levigo.NewWriteOptions()
+	cache.ro = levigo.NewReadOptions()
+	cache.wo = levigo.NewWriteOptions()
 
-	godbc.Ensure(db.ro != nil)
-	godbc.Ensure(db.wo != nil)
-	godbc.Ensure(db.cachesize > 0)
+	godbc.Ensure(cache.ro != nil)
+	godbc.Ensure(cache.wo != nil)
+	godbc.Ensure(cache.cachesize > 0)
 
-	return db
+	return cache
 }
 
-func (c *LevelDBCache) Close() {
-	c.bloomf.Close()
+func (c *IoCacheLevelDB) Close() {
 	c.wo.Close()
 	c.ro.Close()
 	c.db.Close()
 }
 
-func (c *LevelDBCache) Invalidate(key string) {
-	if val, _ := c.db.Get(c.ro, []byte(key)); val != nil {
+func (c *IoCacheLevelDB) Invalidate(key string) {
+	if val, ok := c.cachemap[key]; ok {
 		c.stats.writehits++
 		c.stats.invalidations++
-		c.keyn--
+		delete(c.cachemap, key)
+		c.cacheblocks.Free(val)
 		c.db.Delete(c.wo, []byte(key))
 	}
 }
 
-func (c *LevelDBCache) Evict() {
-	c.stats.evictions++
-
-	for {
-		it := c.db.NewIterator(c.ro)
-		defer it.Close()
-
-		for it.SeekToFirst(); it.Valid(); it.Next() {
-			if it.Value()[0] == 1 {
-				c.db.Put(c.wo, it.Key(), leveldbunvalset)
-			} else {
-				c.db.Delete(c.wo, it.Key())
-				c.keyn--
-				return
-			}
-		}
-	}
-}
-
-func (c *LevelDBCache) Insert(key string) {
+func (c *IoCacheLevelDB) Insert(key string) {
 	c.stats.insertions++
 
+	evictkey, index, _ := c.cacheblocks.Insert(key)
+
 	// Check for evictions
-	if c.keyn >= c.cachesize {
-		c.Evict()
+	if evictkey != "" {
+		c.stats.evictions++
+		delete(c.cachemap, evictkey)
+		c.db.Delete(c.wo, []byte(evictkey))
 	}
 
 	// Insert new key in cache map
-	c.db.Put(c.wo, []byte(key), leveldbvalset)
-	c.keyn++
+	c.cachemap[key] = index
+	c.db.Put(c.wo, []byte(key), buf)
 }
 
-func (c *LevelDBCache) Write(obj string, chunk string) {
+func (c *IoCacheLevelDB) Write(obj string, chunk string) {
 	c.stats.writes++
 
 	key := obj + chunk
@@ -141,18 +121,18 @@ func (c *LevelDBCache) Write(obj string, chunk string) {
 	}
 }
 
-func (c *LevelDBCache) Read(obj, chunk string) {
+func (c *IoCacheLevelDB) Read(obj, chunk string) {
 	c.stats.reads++
 
 	key := obj + chunk
 
-	if val, _ := c.db.Get(c.ro, []byte(key)); val != nil {
+	if val, ok := c.cachemap[key]; ok {
 		// Read Hit
 		c.stats.readhits++
 
 		// Clock Algorithm: Set that we looked
 		// at it
-		c.db.Put(c.wo, []byte(key), leveldbvalset)
+		c.cacheblocks.Using(val)
 	} else {
 		// Read miss
 		// We would do IO here
@@ -160,18 +140,18 @@ func (c *LevelDBCache) Read(obj, chunk string) {
 	}
 }
 
-func (c *LevelDBCache) Delete(obj string) {
+func (c *IoCacheLevelDB) Delete(obj string) {
 	// Not supported
 }
 
-func (c *LevelDBCache) String() string {
+func (c *IoCacheLevelDB) String() string {
 	return fmt.Sprintf(
 		"== Cache Information ==\n"+
 			"Cache Utilization: %.2f %%\n",
-		float64(c.keyn)/float64(c.cachesize)*100.0) +
+		float64(len(c.cachemap))/float64(c.cachesize)*100.0) +
 		c.stats.String()
 }
 
-func (c *LevelDBCache) Stats() *CacheStats {
+func (c *IoCacheLevelDB) Stats() *CacheStats {
 	return c.stats.Copy()
 }

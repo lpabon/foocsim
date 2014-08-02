@@ -42,12 +42,12 @@ type SimFile struct {
 }
 
 // Command line
-var fchunksize = flag.Int("chunksize", 256, "\n\tChunk size in KB. Default 256 KB")
-var fmaxfilesize = flag.Int64("maxfilesize", 1*MB, "\n\tMaximum file size MB. Default 1 TB")
+var fchunksize = flag.Int("chunksize", 256, "\n\tChunk size in KB.")
+var fmaxfilesize = flag.Int64("maxfilesize", 1*MB, "\n\tMaximum file size MB.")
 var frandomfilesize = flag.Bool("randomfilesize", true,
 	"\n\tCreate files of random size with a maximum of maxfilesize."+
-		"\n\tIf false, set the file size exactly to maxfilesize. Default true")
-var fcachesize = flag.Uint64("cachesize", 64, "\n\tCache size in GB. Default 8 GB")
+		"\n\tIf false, set the file size exactly to maxfilesize.")
+var fcachesize = flag.Uint64("cachesize", 64, "\n\tCache size in GB.")
 var fnumfiles = flag.Int("numfiles", 100000, "\n\tNumber of files")
 var fnumios = flag.Int("ios", 5000000, "\n\tNumber of IOs")
 var fdeletion_percent = flag.Int("deletions", 15, "\n\t% of File deletions")
@@ -56,7 +56,7 @@ var fwritethrough = flag.Bool("writethrough", true, "\n\tWritethrough or read mi
 var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "\n\tUse a Zipf or Random distribution")
 var fdataperiod = flag.Int("dataperiod", 1000, "\n\tNumber of IOs per data collected")
 var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use.\n\t"+
-	"Current caches: simple, null, boltdb, iocache, leveldb")
+	"Current caches: simple, null, boltdb, iocache, leveldb, iocacheleveldb")
 
 func main() {
 
@@ -119,6 +119,8 @@ func main() {
 		cache = caches.NewIoCache(cachesize, (*fwritethrough))
 	case "leveldb":
 		cache = caches.NewLevelDBCache(cachesize, (*fwritethrough))
+	case "iocacheleveldb":
+		cache = caches.NewIoCacheLevelDB(cachesize, (*fwritethrough))
 	default:
 		fmt.Printf("ERROR: Unknown cachetype: %s\n", *fcachetype)
 		return
