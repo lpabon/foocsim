@@ -22,8 +22,6 @@ import (
 	"os"
 )
 
-var buf []byte
-
 func init() {
 	buf = make([]byte, 4096)
 }

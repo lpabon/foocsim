@@ -121,11 +121,11 @@ func main() {
 	case "leveldb":
 		cache = caches.NewLevelDBCache(cachesize, (*fwritethrough))
 	case "iocacheleveldb":
-		cache = caches.NewIoCacheLevelDB(cachesize, (*fwritethrough))
+		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), "leveldb")
 	case "iocacherocksdb":
-		cache = caches.NewIoCacheRocksDB(cachesize, (*fwritethrough))
+		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), "rocksdb")
 	case "iocacheboltdb":
-		cache = caches.NewIoCacheBoltDB(cachesize, (*fwritethrough))
+		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), "boltdb")
 	default:
 		fmt.Printf("ERROR: Unknown cachetype: %s\n", *fcachetype)
 		return
