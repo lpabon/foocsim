@@ -55,9 +55,9 @@ var fread_percent = flag.Int("reads", 65, "\n\t% of Reads")
 var fwritethrough = flag.Bool("writethrough", true, "\n\tWritethrough or read miss")
 var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "\n\tUse a Zipf or Random distribution")
 var fdataperiod = flag.Int("dataperiod", 1000, "\n\tNumber of IOs per data collected")
-var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use.\n\t"+
-	"Current caches: simple, null, boltdb, iocache, leveldb,"+
-	"iocacheleveldb, iocacherocksdb, iocacheboltdb")
+var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use."+
+	"\n\tCache types with no IO backend: simple, null, iocache."+
+	"\n\tCache types with IO backends using iocache frontend: leveldb, rocksdb, boltdb.")
 
 func main() {
 
@@ -114,17 +114,13 @@ func main() {
 		cache = caches.NewSimpleCache(cachesize, (*fwritethrough))
 	case "null":
 		cache = caches.NewNullCache()
-	case "boltdb":
-		cache = caches.NewBoltDBCache(cachesize, (*fwritethrough))
 	case "iocache":
 		cache = caches.NewIoCache(cachesize, (*fwritethrough))
 	case "leveldb":
-		cache = caches.NewLevelDBCache(cachesize, (*fwritethrough))
-	case "iocacheleveldb":
 		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), "leveldb")
-	case "iocacherocksdb":
+	case "rocksdb":
 		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), "rocksdb")
-	case "iocacheboltdb":
+	case "boltdb":
 		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), "boltdb")
 	default:
 		fmt.Printf("ERROR: Unknown cachetype: %s\n", *fcachetype)
