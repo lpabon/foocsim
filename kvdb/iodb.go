@@ -31,7 +31,6 @@ const (
 )
 
 type IoSegment struct {
-	max          uint64
 	size         uint64
 	metadatasize uint64
 	datasize     uint64
@@ -47,6 +46,7 @@ type KVIoDB struct {
 	segment    IoSegment
 	current    uint64
 	entry      uint64
+	segments   uint64
 	maxentries uint64
 	segmentbuf []byte
 	data       *bufferio.BufferIO
@@ -59,18 +59,19 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 	var err error
 
 	db := &KVIoDB{}
-	db.size = blocks * uint64(blocksize)
 	db.blocksize = uint64(blocksize)
 	db.segment.metadatasize = 4 * KB
-	db.segment.datasize = 4 * MB
+	db.segment.datasize = 1 * MB
 	db.maxentries = db.segment.datasize / db.blocksize
 	db.segment.size = db.segment.metadatasize + db.segment.datasize
-	db.segment.max = db.size / uint64(db.segment.size)
+	db.segments = blocks / db.maxentries
+	db.size = db.segments * db.segment.size
 
 	db.segmentbuf = make([]byte, db.segment.size)
 	db.data = bufferio.NewBufferIO(db.segmentbuf[:db.segment.datasize])
 	db.meta = bufferio.NewBufferIO(db.segmentbuf[db.segment.datasize:])
 
+	os.Remove(dbpath)
 	db.fp, err = os.OpenFile(dbpath, syscall.O_DIRECT|os.O_CREATE|os.O_RDWR, os.ModePerm)
 	godbc.Check(err == nil)
 
@@ -114,15 +115,18 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 	buf := make([]byte, c.blocksize)
 	offset := (index*c.blocksize + (index/c.maxentries)*c.segment.metadatasize)
 
-	if (offset > c.current) && (offset < (c.current + c.segment.size)) {
+	if (offset >= c.current) && (offset < (c.current + c.segment.datasize)) {
 		n, err = c.data.ReadAt(buf, int64(offset-c.current))
 		fmt.Printf("+RAM\n")
+		godbc.Check(uint64(n) == c.blocksize,
+			fmt.Sprintf("Read %v expected:%v from location:%v index:%v current:%v",
+				n, c.blocksize, offset, index, c.current))
 	} else {
 		n, err = c.fp.ReadAt(buf, int64(offset))
+		godbc.Check(uint64(n) == c.blocksize,
+			fmt.Sprintf("Read %v expected %v from location %v index %v current:%v",
+				n, c.blocksize, offset, index, c.current))
 	}
-	godbc.Check(uint64(n) == c.blocksize,
-		fmt.Sprintf("Read %v expected %v from location %v",
-			n, c.blocksize, offset))
 	godbc.Check(err == nil)
 
 	return buf, nil
