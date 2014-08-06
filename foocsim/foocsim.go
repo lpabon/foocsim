@@ -57,7 +57,7 @@ var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "\n\tUse a
 var fdataperiod = flag.Int("dataperiod", 1000, "\n\tNumber of IOs per data collected")
 var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use."+
 	"\n\tCache types with no IO backend: simple, null, iocache."+
-	"\n\tCache types with IO backends using iocache frontend: leveldb, rocksdb, boltdb.")
+	"\n\tCache types with IO backends using iocache frontend: leveldb, rocksdb, boltdb, iodb")
 
 func main() {
 
@@ -116,15 +116,8 @@ func main() {
 		cache = caches.NewNullCache()
 	case "iocache":
 		cache = caches.NewIoCache(cachesize, (*fwritethrough))
-	case "leveldb":
-		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), "leveldb")
-	case "rocksdb":
-		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), "rocksdb")
-	case "boltdb":
-		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), "boltdb")
 	default:
-		fmt.Printf("ERROR: Unknown cachetype: %s\n", *fcachetype)
-		return
+		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), uint32(chunksize), *fcachetype)
 	}
 	defer cache.Close()
 

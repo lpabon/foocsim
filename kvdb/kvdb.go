@@ -17,7 +17,7 @@ package kvdb
 
 type Kvdb interface {
 	Close()
-	Put(key, val []byte) error
-	Get(key []byte) ([]byte, error)
-	Delete(key []byte) error
+	Put(key, val []byte, index uint64) error
+	Get(key []byte, index uint64) ([]byte, error)
+	Delete(key []byte, index uint64) error
 }

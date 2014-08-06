@@ -23,10 +23,6 @@ import (
 
 var buf []byte
 
-func init() {
-	buf = make([]byte, 4096)
-}
-
 type IoCacheKvDB struct {
 	stats        CacheStats
 	cachemap     map[string]uint64
@@ -36,7 +32,7 @@ type IoCacheKvDB struct {
 	db           kvdb.Kvdb
 }
 
-func NewIoCacheKvDB(cachesize uint64, writethrough bool, dbtype string) *IoCacheKvDB {
+func NewIoCacheKvDB(cachesize uint64, writethrough bool, chunksize uint32, dbtype string) *IoCacheKvDB {
 
 	godbc.Require(cachesize > 0)
 
@@ -45,6 +41,7 @@ func NewIoCacheKvDB(cachesize uint64, writethrough bool, dbtype string) *IoCache
 	cache.cachemap = make(map[string]uint64)
 	cache.cachesize = cachesize
 	cache.writethrough = writethrough
+	buf = make([]byte, chunksize)
 
 	switch dbtype {
 	case "leveldb":
@@ -53,9 +50,12 @@ func NewIoCacheKvDB(cachesize uint64, writethrough bool, dbtype string) *IoCache
 		cache.db = kvdb.NewKVRocksDB("cache.iorocksdb")
 	case "boltdb":
 		cache.db = kvdb.NewKVBoltDB("cache.ioboltdb")
+	case "iodb":
+		cache.db = kvdb.NewKVIoDB("cache.iodb", cachesize, chunksize)
 	default:
-		godbc.Check(false, "Unkonwn db type")
+		godbc.Check(false, "Unknown cache db type")
 	}
+
 	godbc.Check(cache.db != nil)
 	godbc.Ensure(cache.cachesize > 0)
 
@@ -67,12 +67,12 @@ func (c *IoCacheKvDB) Close() {
 }
 
 func (c *IoCacheKvDB) Invalidate(key string) {
-	if val, ok := c.cachemap[key]; ok {
+	if index, ok := c.cachemap[key]; ok {
 		c.stats.writehits++
 		c.stats.invalidations++
 		delete(c.cachemap, key)
-		c.cacheblocks.Free(val)
-		c.db.Delete([]byte(key))
+		c.cacheblocks.Free(index)
+		c.db.Delete([]byte(key), index)
 	}
 }
 
@@ -85,12 +85,12 @@ func (c *IoCacheKvDB) Insert(key string) {
 	if evictkey != "" {
 		c.stats.evictions++
 		delete(c.cachemap, evictkey)
-		c.db.Delete([]byte(evictkey))
+		c.db.Delete([]byte(evictkey), index)
 	}
 
 	// Insert new key in cache map
 	c.cachemap[key] = index
-	c.db.Put([]byte(key), buf)
+	c.db.Put([]byte(key), buf, index)
 }
 
 func (c *IoCacheKvDB) Write(obj string, chunk string) {
@@ -114,13 +114,15 @@ func (c *IoCacheKvDB) Read(obj, chunk string) {
 
 	key := obj + chunk
 
-	if val, ok := c.cachemap[key]; ok {
+	if index, ok := c.cachemap[key]; ok {
 		// Read Hit
 		c.stats.readhits++
 
 		// Clock Algorithm: Set that we looked
 		// at it
-		c.cacheblocks.Using(val)
+		c.cacheblocks.Using(index)
+		c.db.Get([]byte(key), index)
+
 	} else {
 		// Read miss
 		// We would do IO here

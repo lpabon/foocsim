@@ -49,14 +49,14 @@ func (c *KVBoltDB) Close() {
 	c.db.Close()
 }
 
-func (c *KVBoltDB) Put(key, val []byte) (err error) {
+func (c *KVBoltDB) Put(key, val []byte, index uint64) (err error) {
 	err = c.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket([]byte("cache")).Put(key, val)
 	})
 	return
 }
 
-func (c *KVBoltDB) Get(key []byte) (val []byte, err error) {
+func (c *KVBoltDB) Get(key []byte, index uint64) (val []byte, err error) {
 	err = c.db.View(func(tx *bolt.Tx) error {
 		val = tx.Bucket([]byte("cache")).Get(key)
 		return nil
@@ -64,7 +64,7 @@ func (c *KVBoltDB) Get(key []byte) (val []byte, err error) {
 	return
 }
 
-func (c *KVBoltDB) Delete(key []byte) (err error) {
+func (c *KVBoltDB) Delete(key []byte, index uint64) (err error) {
 	err = c.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket([]byte("cache")).Delete(key)
 	})

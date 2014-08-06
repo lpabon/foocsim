@@ -59,14 +59,14 @@ func (c *KVLevelDB) Close() {
 	c.db.Close()
 }
 
-func (c *KVLevelDB) Put(key, val []byte) error {
+func (c *KVLevelDB) Put(key, val []byte, index uint64) error {
 	return c.db.Put(c.wo, key, val)
 }
 
-func (c *KVLevelDB) Get(key []byte) ([]byte, error) {
+func (c *KVLevelDB) Get(key []byte, index uint64) ([]byte, error) {
 	return c.db.Get(c.ro, key)
 }
 
-func (c *KVLevelDB) Delete(key []byte) error {
+func (c *KVLevelDB) Delete(key []byte, index uint64) error {
 	return c.db.Delete(c.wo, key)
 }
