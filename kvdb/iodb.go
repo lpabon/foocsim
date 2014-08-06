@@ -108,9 +108,18 @@ func (c *KVIoDB) Put(key, val []byte, index uint64) error {
 
 func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 
+	var n int
+	var err error
+
 	buf := make([]byte, c.blocksize)
 	offset := (index*c.blocksize + (index/c.maxentries)*c.segment.metadatasize)
-	n, err := c.fp.ReadAt(buf, int64(offset))
+
+	if (offset > c.current) && (offset < (c.current + c.segment.size)) {
+		n, err = c.data.ReadAt(buf, int64(offset-c.current))
+		fmt.Printf("+RAM\n")
+	} else {
+		n, err = c.fp.ReadAt(buf, int64(offset))
+	}
 	godbc.Check(uint64(n) == c.blocksize,
 		fmt.Sprintf("Read %v expected %v from location %v",
 			n, c.blocksize, offset))
