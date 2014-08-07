@@ -91,6 +91,7 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 		// Fill ch available with all the available buffers
 		db.chavailable <- i
 	}
+	db.segment = <-db.chavailable
 
 	os.Remove(dbpath)
 	db.fp, err = os.OpenFile(dbpath, syscall.O_DIRECT|os.O_CREATE|os.O_RDWR, os.ModePerm)
@@ -122,6 +123,7 @@ func (c *KVIoDB) sync() {
 
 	// Get a new available buffer
 	c.segment = <-c.chavailable
+	godbc.Check(c.segment < c.segmentbuffers)
 
 	// Reset the bufferIO managers
 	c.segments[c.segment].data.Reset()
@@ -160,7 +162,6 @@ func (c *KVIoDB) Put(key, val []byte, index uint64) error {
 	c.segments[c.segment].meta.WriteDataLE(keyentry)
 	c.entry++
 
-	fmt.Printf("%v_", index)
 	return nil
 }
 
@@ -180,7 +181,7 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 
 			n, err = c.segments[i].data.ReadAt(buf, int64(offset-c.segments[i].offset))
 
-			fmt.Printf("+RAM\n")
+			//fmt.Printf("+RAM%v", i)
 			godbc.Check(uint64(n) == c.blocksize,
 				fmt.Sprintf("Read %v expected:%v from location:%v index:%v current:%v",
 					n, c.blocksize, offset, index, c.current))
