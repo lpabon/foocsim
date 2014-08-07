@@ -17,6 +17,7 @@ package caches
 
 import (
 	"fmt"
+	"github.com/lpabon/bufferio"
 	"github.com/lpabon/foocsim/kvdb"
 	"github.com/lpabon/godbc"
 )
@@ -90,6 +91,10 @@ func (c *IoCacheKvDB) Insert(key string) {
 
 	// Insert new key in cache map
 	c.cachemap[key] = index
+
+	b := bufferio.NewBufferIO(buf)
+	b.Write([]byte(key))
+
 	c.db.Put([]byte(key), buf, index)
 }
 
@@ -121,7 +126,13 @@ func (c *IoCacheKvDB) Read(obj, chunk string) {
 		// Clock Algorithm: Set that we looked
 		// at it
 		c.cacheblocks.Using(index)
-		c.db.Get([]byte(key), index)
+		val, err := c.db.Get([]byte(key), index)
+		godbc.Check(err == nil)
+
+		keycheck := make([]byte, len(key))
+		b := bufferio.NewBufferIO(val)
+		b.Read(keycheck)
+		godbc.Check(key == string(keycheck), fmt.Sprintf("key[%s] != %s", key, keycheck))
 
 	} else {
 		// Read miss
