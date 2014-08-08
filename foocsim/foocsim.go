@@ -42,15 +42,15 @@ type SimFile struct {
 }
 
 // Command line
-var fchunksize = flag.Int("chunksize", 256, "\n\tChunk size in KB.")
-var fmaxfilesize = flag.Int64("maxfilesize", 1*MB, "\n\tMaximum file size MB.")
-var frandomfilesize = flag.Bool("randomfilesize", true,
+var fchunksize = flag.Int("chunksize", 64, "\n\tChunk size in KB.")
+var fmaxfilesize = flag.Int64("maxfilesize", 8*GB, "\n\tMaximum file size MB.")
+var frandomfilesize = flag.Bool("randomfilesize", false,
 	"\n\tCreate files of random size with a maximum of maxfilesize."+
 		"\n\tIf false, set the file size exactly to maxfilesize.")
-var fcachesize = flag.Uint64("cachesize", 64, "\n\tCache size in GB.")
-var fnumfiles = flag.Int("numfiles", 100000, "\n\tNumber of files")
+var fcachesize = flag.Uint64("cachesize", 8, "\n\tCache size in GB.")
+var fnumfiles = flag.Int("numfiles", 1, "\n\tNumber of files")
 var fnumios = flag.Int("ios", 5000000, "\n\tNumber of IOs")
-var fdeletion_percent = flag.Int("deletions", 15, "\n\t% of File deletions")
+var fdeletion_percent = flag.Int("deletions", 0, "\n\t% of File deletions")
 var fread_percent = flag.Int("reads", 65, "\n\t% of Reads")
 var fwritethrough = flag.Bool("writethrough", true, "\n\tWritethrough or read miss")
 var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "\n\tUse a Zipf or Random distribution")

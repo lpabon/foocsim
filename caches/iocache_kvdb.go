@@ -94,6 +94,7 @@ func (c *IoCacheKvDB) Insert(key string) {
 
 	b := bufferio.NewBufferIO(buf)
 	b.Write([]byte(key))
+	b.WriteDataLE(index)
 
 	c.db.Put([]byte(key), buf, index)
 }
@@ -129,9 +130,13 @@ func (c *IoCacheKvDB) Read(obj, chunk string) {
 		val, err := c.db.Get([]byte(key), index)
 		godbc.Check(err == nil)
 
+		// Check Data returned.
+		var indexcheck uint64
 		keycheck := make([]byte, len(key))
 		b := bufferio.NewBufferIO(val)
 		b.Read(keycheck)
+		b.ReadDataLE(&indexcheck)
+		godbc.Check(indexcheck == index, fmt.Sprintf("index[%v] != %v", index, indexcheck))
 		godbc.Check(key == string(keycheck), fmt.Sprintf("key[%s] != %s", key, keycheck))
 
 	} else {

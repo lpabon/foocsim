@@ -41,6 +41,7 @@ type IoSegment struct {
 	data       *bufferio.BufferIO
 	meta       *bufferio.BufferIO
 	offset     uint64
+	written    bool
 }
 
 type IoEntryKey struct {
@@ -58,10 +59,10 @@ type KVIoDB struct {
 	chquit         chan int
 	segmentbuffers int
 	current        uint64
-	entry          uint64
 	numsegments    uint64
 	maxentries     uint64
 	fp             *os.File
+	wrapped        bool
 }
 
 func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
@@ -72,7 +73,7 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 	db.blocksize = uint64(blocksize)
 	db.segmentinfo.metadatasize = 4 * KB
 	db.segmentinfo.datasize = 1 * MB
-	db.segmentbuffers = 32
+	db.segmentbuffers = 128
 	db.maxentries = db.segmentinfo.datasize / db.blocksize
 	db.segmentinfo.size = db.segmentinfo.metadatasize + db.segmentinfo.datasize
 	db.numsegments = blocks / db.maxentries
@@ -82,7 +83,6 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 	db.chwriting = make(chan int, db.segmentbuffers)
 	db.chavailable = make(chan int, db.segmentbuffers)
 	db.chquit = make(chan int)
-	db.segment = 0
 	for i := 0; i < db.segmentbuffers; i++ {
 		db.segments[i].segmentbuf = make([]byte, db.segmentinfo.size)
 		db.segments[i].data = bufferio.NewBufferIO(db.segments[i].segmentbuf[:db.segmentinfo.datasize])
@@ -100,6 +100,16 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 	// Start writer thread
 	db.writer()
 
+	godbc.Ensure(db.blocksize == uint64(blocksize))
+	godbc.Ensure(db.chwriting != nil)
+	godbc.Ensure(db.chavailable != nil)
+	godbc.Ensure(db.chquit != nil)
+	godbc.Ensure(db.segmentbuffers == len(db.segments))
+	godbc.Ensure((db.segmentbuffers - 1) == len(db.chavailable))
+	godbc.Ensure(0 == len(db.chquit))
+	godbc.Ensure(0 == len(db.chwriting))
+	godbc.Ensure(0 == db.segment)
+
 	return db
 }
 
@@ -107,9 +117,11 @@ func (c *KVIoDB) writer() {
 
 	go func() {
 		for i := range c.chwriting {
-			n, err := c.fp.WriteAt(c.segments[i].segmentbuf, int64(c.segments[i].offset))
-			godbc.Check(n == len(c.segments[i].segmentbuf))
-			godbc.Check(err == nil)
+			if c.segments[i].written {
+				n, err := c.fp.WriteAt(c.segments[i].segmentbuf, int64(c.segments[i].offset))
+				godbc.Check(n == len(c.segments[i].segmentbuf))
+				godbc.Check(err == nil)
+			}
 			c.chavailable <- i
 		}
 		close(c.chquit)
@@ -132,10 +144,21 @@ func (c *KVIoDB) sync() {
 	// Move to the next offset
 	c.current += c.segmentinfo.size
 	c.current = c.current % c.size
+	if 0 == c.current {
+		c.wrapped = true
+	}
 	c.segments[c.segment].offset = c.current
 
-	// Reset the number of entries in the segment
-	c.entry = 0
+	// Ok, we have wrapped around.  We need to read the data
+	// on the storage device back into the segment.  That way
+	// we will only write the indexes that have been evicted.
+	// Also, if non are written, we have atleast preloaded it into
+	// memory for read hits.
+	if c.wrapped {
+		n, err := c.fp.ReadAt(c.segments[c.segment].segmentbuf, int64(c.segments[c.segment].offset))
+		godbc.Check(n == len(c.segments[c.segment].segmentbuf))
+		godbc.Check(err == nil)
+	}
 
 }
 
@@ -146,21 +169,37 @@ func (c *KVIoDB) Close() {
 	c.fp.Close()
 }
 
+func (c *KVIoDB) offset(index uint64) uint64 {
+	return (index*c.blocksize + (index/c.maxentries)*c.segmentinfo.metadatasize)
+}
+
+func (c *KVIoDB) inRange(index uint64, segment int) bool {
+	offset := c.offset(index)
+
+	return ((offset >= c.segments[segment].offset) &&
+		(offset < (c.segments[segment].offset + c.segmentinfo.datasize)))
+}
+
 func (c *KVIoDB) Put(key, val []byte, index uint64) error {
 
-	var keyentry IoEntryKey
-
-	if c.entry >= c.maxentries {
+	for !c.inRange(index, c.segment) {
 		c.sync()
 	}
 
-	n, err := c.segments[c.segment].data.Write(val)
+	offset := c.offset(index)
+
+	godbc.Require(c.inRange(index, c.segment),
+		fmt.Sprintf("[%v - %v - %v]",
+			c.segments[c.segment].offset,
+			offset,
+			c.segments[c.segment].offset+c.segmentinfo.datasize))
+
+	n, err := c.segments[c.segment].data.WriteAt(val, int64(offset-c.segments[c.segment].offset))
 	godbc.Check(n == len(val))
 	godbc.Check(err == nil)
 
-	keyentry.key = string(key)
-	c.segments[c.segment].meta.WriteDataLE(keyentry)
-	c.entry++
+	c.segments[c.segment].written = true
+	c.segments[c.segment].meta.Write([]byte(key))
 
 	return nil
 }
@@ -181,7 +220,6 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 
 			n, err = c.segments[i].data.ReadAt(buf, int64(offset-c.segments[i].offset))
 
-			//fmt.Printf("+RAM%v", i)
 			godbc.Check(uint64(n) == c.blocksize,
 				fmt.Sprintf("Read %v expected:%v from location:%v index:%v current:%v",
 					n, c.blocksize, offset, index, c.current))
