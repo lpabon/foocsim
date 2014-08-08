@@ -70,3 +70,7 @@ func (c *KVRocksDB) Get(key []byte, index uint64) ([]byte, error) {
 func (c *KVRocksDB) Delete(key []byte, index uint64) error {
 	return c.db.Delete(c.wo, key)
 }
+
+func (c *KVRocksDB) String() string {
+	return ""
+}

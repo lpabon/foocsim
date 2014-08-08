@@ -155,7 +155,8 @@ func (c *IoCacheKvDB) String() string {
 		"== Cache Information ==\n"+
 			"Cache Utilization: %.2f %%\n",
 		float64(len(c.cachemap))/float64(c.cachesize)*100.0) +
-		c.stats.String()
+		c.stats.String() +
+		c.db.String()
 }
 
 func (c *IoCacheKvDB) Stats() *CacheStats {

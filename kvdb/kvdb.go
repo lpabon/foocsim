@@ -20,4 +20,5 @@ type Kvdb interface {
 	Put(key, val []byte, index uint64) error
 	Get(key []byte, index uint64) ([]byte, error)
 	Delete(key []byte, index uint64) error
+	String() string
 }

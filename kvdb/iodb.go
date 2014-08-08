@@ -44,8 +44,53 @@ type IoSegment struct {
 	written    bool
 }
 
-type IoEntryKey struct {
-	key string
+type IoStats struct {
+	ramhits     uint64
+	storagehits uint64
+	wraps       uint64
+	seg_skipped uint64
+}
+
+func NewIoStats() *IoStats {
+	return &IoStats{}
+}
+
+func (s *IoStats) SegmentSkipped() {
+	s.seg_skipped++
+}
+
+func (s *IoStats) RamHit() {
+	s.ramhits++
+}
+
+func (s *IoStats) StorageHit() {
+	s.storagehits++
+}
+
+func (s *IoStats) Wrapped() {
+	s.wraps++
+}
+
+func (s *IoStats) RamHitRate() float64 {
+	hits := s.ramhits + s.storagehits
+	if 0 == hits {
+		return 0.0
+	} else {
+		return float64(s.ramhits) / float64(hits)
+	}
+}
+
+func (s *IoStats) String() string {
+	return fmt.Sprintf("Ram Hit Rate: %.4f\n"+
+		"Ram Hits: %v\n"+
+		"Storage Hits: %v\n"+
+		"Wraps: %v\n"+
+		"Segments Skipped: %v\n",
+		s.RamHitRate(),
+		s.ramhits,
+		s.storagehits,
+		s.wraps,
+		s.seg_skipped)
 }
 
 type KVIoDB struct {
@@ -63,6 +108,7 @@ type KVIoDB struct {
 	maxentries     uint64
 	fp             *os.File
 	wrapped        bool
+	stats          *IoStats
 }
 
 func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
@@ -70,10 +116,11 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 	var err error
 
 	db := &KVIoDB{}
+	db.stats = NewIoStats()
 	db.blocksize = uint64(blocksize)
 	db.segmentinfo.metadatasize = 4 * KB
 	db.segmentinfo.datasize = 1 * MB
-	db.segmentbuffers = 128
+	db.segmentbuffers = 32
 	db.maxentries = db.segmentinfo.datasize / db.blocksize
 	db.segmentinfo.size = db.segmentinfo.metadatasize + db.segmentinfo.datasize
 	db.numsegments = blocks / db.maxentries
@@ -121,6 +168,9 @@ func (c *KVIoDB) writer() {
 				n, err := c.fp.WriteAt(c.segments[i].segmentbuf, int64(c.segments[i].offset))
 				godbc.Check(n == len(c.segments[i].segmentbuf))
 				godbc.Check(err == nil)
+				c.segments[i].written = false
+			} else {
+				c.stats.SegmentSkipped()
 			}
 			c.chavailable <- i
 		}
@@ -145,6 +195,7 @@ func (c *KVIoDB) sync() {
 	c.current += c.segmentinfo.size
 	c.current = c.current % c.size
 	if 0 == c.current {
+		c.stats.Wrapped()
 		c.wrapped = true
 	}
 	c.segments[c.segment].offset = c.current
@@ -210,7 +261,7 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 	var err error
 
 	buf := make([]byte, c.blocksize)
-	offset := (index*c.blocksize + (index/c.maxentries)*c.segmentinfo.metadatasize)
+	offset := c.offset(index)
 
 	// Check if the data is in RAM.  Go through each buffered segment
 	for i := 0; i < c.segmentbuffers; i++ {
@@ -224,6 +275,7 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 				fmt.Sprintf("Read %v expected:%v from location:%v index:%v current:%v",
 					n, c.blocksize, offset, index, c.current))
 			godbc.Check(err == nil)
+			c.stats.RamHit()
 
 			return buf, nil
 		}
@@ -235,6 +287,7 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 		fmt.Sprintf("Read %v expected %v from location %v index %v current:%v",
 			n, c.blocksize, offset, index, c.current))
 	godbc.Check(err == nil)
+	c.stats.StorageHit()
 
 	return buf, nil
 }
@@ -242,4 +295,10 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 func (c *KVIoDB) Delete(key []byte, index uint64) error {
 	// nothing to do
 	return nil
+}
+
+func (c *KVIoDB) String() string {
+	return fmt.Sprintf(
+		"== IoDB Information ==\n") +
+		c.stats.String()
 }

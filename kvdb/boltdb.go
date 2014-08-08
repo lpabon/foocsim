@@ -70,3 +70,7 @@ func (c *KVBoltDB) Delete(key []byte, index uint64) (err error) {
 	})
 	return
 }
+
+func (c *KVBoltDB) String() string {
+	return ""
+}
