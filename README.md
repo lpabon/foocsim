@@ -1,13 +1,14 @@
 # foocsim
 
-Simple file or object cache simulator
+Foocsim is a simple single threaded cache simulator.  It uses a ZipF load generator to study the behavior of various cache implementations.
 
 ## Installation
-In your `GOPATH` type:
+You will need to have leveldb and rocksdb development headers and libraries installed.  Then, in your `GOPATH` type:
 
 ```
 $ go get github.com/lpabon/foocsim
-$ go get github.com/lpabon/godbc
+$ cd $GOPATH/src/github.com/lpabon/foocsim
+$ go get ./...
 ```
 
 ## Example
@@ -53,21 +54,58 @@ $ ./fooplot.gp
 
 ![writes](images/cache_writes.png)
 
-## Help
+### Help Screen
 
 ```
 $ go run foocsim.go -help
 Usage of foocsim:
-  -cachesize=64: Cache size in GB. Default 8 GB
-  -cachetype="simple": Cache type to use.  Current caches: simple, null
-  -chunksize=256: Chunk size in KB. Default 256 KB
-  -dataperiod=1000: Number of IOs per data collected
-  -deletions=15: % of File deletions
-  -ios=5000000: Number of IOs
-  -maxfilesize=1048576: Maximum file size MB. Default 1 TB
-  -numfiles=100000: Number of files
-  -reads=65: % of Reads
-  -writethrough=true: Writethrough or read miss
-  -zipf_filedistribution=true: Use a Zipf or Random distribution
-exit status 2
+  -cachesize=8:
+    Cache size in GB.
+  -cachetype="simple":
+    Cache type to use.
+    Cache types with no IO backend: simple, null, iocache.
+    Cache types with IO backends using iocache frontend: leveldb, rocksdb, boltdb, iodb
+  -chunksize=64:
+    Chunk size in KB.
+  -dataperiod=1000:
+    Number of IOs per data collected
+  -deletions=0:
+    % of File deletions
+  -ios=5000000:
+    Number of IOs
+  -maxfilesize=8589934592:
+    Maximum file size MB.
+  -numfiles=1:
+    Number of files
+  -randomfilesize=false:
+    Create files of random size with a maximum of maxfilesize.
+    If false, set the file size exactly to maxfilesize.
+  -reads=65:
+    % of Reads
+  -writethrough=true:
+    Writethrough or read miss
+  -zipf_filedistribution=true:
+    Use a Zipf or Random distribution
 ```
+
+### Cache Types
+
+#### Caches with no IO generated
+
+* **null**: Caches nothing.  Useful for testing.
+* **simple**: Uses Golang maps as key-val store with a CLOCK-like eviction policy.
+* **iocache**: Uses data structures described in [Mercury][].
+
+#### Caches which generate IO
+
+* **boltdb**:  Uses [BoltDB][]
+* **leveldb**: Uses [levigo][] Golang bindings for [LevelDB][]
+* **rocksdb**: Uses [gorocksdb][] Golang bindings for [RocksDB][]
+* **iodb**: Uses data structures based on [Mercury][].
+
+[Mercury]: http://storageconference.us/2012/Papers/04.Flash.1.Mercury.pdf
+[BoltDB]: https://github.com/boltdb/bolt
+[LevelDB]: http://code.google.com/p/leveldb/
+[levigo]: https://github.com/jmhodges/levigo
+[gorocksdb]: https://github.com/DanielMorsing/rocksdb
+[RocksDB]: http://rocksdb.org/
