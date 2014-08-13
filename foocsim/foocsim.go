@@ -24,6 +24,7 @@ import (
 	"github.com/lpabon/godbc"
 	"math/rand"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"sync"
@@ -61,6 +62,7 @@ var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use."+
 	"\n\tCache types with IO backends using iocache frontend: leveldb, rocksdb, boltdb, iodb")
 
 func main() {
+	runtime.GOMAXPROCS(4)
 
 	// Parse flags
 	flag.Parse()
