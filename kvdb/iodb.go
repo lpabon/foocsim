@@ -21,6 +21,7 @@ import (
 	"github.com/lpabon/godbc"
 	"os"
 	"syscall"
+	"time"
 )
 
 const (
@@ -44,15 +45,51 @@ type IoSegment struct {
 	written    bool
 }
 
+type IoStatDuration struct {
+	duration int64
+	counter  int64
+}
+
+func (d *IoStatDuration) Add(delta time.Duration) {
+	d.duration += delta.Nanoseconds()
+	d.counter++
+}
+
+func (d *IoStatDuration) MeanTimeUsecs() float64 {
+	if d.counter == 0 {
+		return 0.0
+	}
+	return (float64(d.duration) / float64(d.counter)) / 1000.0
+}
+
+func (d *IoStatDuration) String() string {
+	return fmt.Sprintf("duration = %v\n"+
+		"counter = %v\n",
+		d.duration,
+		d.counter)
+}
+
 type IoStats struct {
 	ramhits     uint64
 	storagehits uint64
 	wraps       uint64
 	seg_skipped uint64
+	readtime    *IoStatDuration
+	writetime   *IoStatDuration
 }
 
 func NewIoStats() *IoStats {
-	return &IoStats{}
+
+	stats := &IoStats{}
+	stats.readtime = &IoStatDuration{}
+	stats.writetime = &IoStatDuration{}
+
+	return stats
+
+}
+
+func (s *IoStats) Close() {
+
 }
 
 func (s *IoStats) SegmentSkipped() {
@@ -71,6 +108,14 @@ func (s *IoStats) Wrapped() {
 	s.wraps++
 }
 
+func (s *IoStats) ReadTimeRecord(d time.Duration) {
+	s.readtime.Add(d)
+}
+
+func (s *IoStats) WriteTimeRecord(d time.Duration) {
+	s.writetime.Add(d)
+}
+
 func (s *IoStats) RamHitRate() float64 {
 	hits := s.ramhits + s.storagehits
 	if 0 == hits {
@@ -85,12 +130,16 @@ func (s *IoStats) String() string {
 		"Ram Hits: %v\n"+
 		"Storage Hits: %v\n"+
 		"Wraps: %v\n"+
-		"Segments Skipped: %v\n",
+		"Segments Skipped: %v\n"+
+		"Mean Read Latency: %.2f usec\n"+
+		"Mean Write Latency: %.2f usec\n",
 		s.RamHitRate(),
 		s.ramhits,
 		s.storagehits,
 		s.wraps,
-		s.seg_skipped)
+		s.seg_skipped,
+		s.readtime.MeanTimeUsecs(),
+		s.writetime.MeanTimeUsecs()) // + s.readtime.String() + s.writetime.String()
 }
 
 type KVIoDB struct {
@@ -165,7 +214,10 @@ func (c *KVIoDB) writer() {
 	go func() {
 		for i := range c.chwriting {
 			if c.segments[i].written {
+				start := time.Now()
 				n, err := c.fp.WriteAt(c.segments[i].segmentbuf, int64(c.segments[i].offset))
+				end := time.Now()
+				c.stats.WriteTimeRecord(end.Sub(start))
 				godbc.Check(n == len(c.segments[i].segmentbuf))
 				godbc.Check(err == nil)
 				c.segments[i].written = false
@@ -206,7 +258,10 @@ func (c *KVIoDB) sync() {
 	// Also, if non are written, we have atleast preloaded it into
 	// memory for read hits.
 	if c.wrapped {
+		start := time.Now()
 		n, err := c.fp.ReadAt(c.segments[c.segment].segmentbuf, int64(c.segments[c.segment].offset))
+		end := time.Now()
+		c.stats.ReadTimeRecord(end.Sub(start))
 		godbc.Check(n == len(c.segments[c.segment].segmentbuf))
 		godbc.Check(err == nil)
 	}
@@ -218,6 +273,7 @@ func (c *KVIoDB) Close() {
 	close(c.chwriting)
 	<-c.chquit
 	c.fp.Close()
+	fmt.Printf("== IoDB Stats ==\n" + c.stats.String())
 }
 
 func (c *KVIoDB) offset(index uint64) uint64 {
@@ -282,7 +338,11 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 	}
 
 	// Read from storage
+	start := time.Now()
 	n, err = c.fp.ReadAt(buf, int64(offset))
+	end := time.Now()
+	c.stats.ReadTimeRecord(end.Sub(start))
+
 	godbc.Check(uint64(n) == c.blocksize,
 		fmt.Sprintf("Read %v expected %v from location %v index %v current:%v",
 			n, c.blocksize, offset, index, c.current))
@@ -298,7 +358,5 @@ func (c *KVIoDB) Delete(key []byte, index uint64) error {
 }
 
 func (c *KVIoDB) String() string {
-	return fmt.Sprintf(
-		"== IoDB Information ==\n") +
-		c.stats.String()
+	return ""
 }

@@ -96,8 +96,6 @@ func main() {
 	}
 	defer cache.Close()
 
-	// Initialize the stats used for delta calculations
-	prev_stats := cache.Stats()
 	f, _ := os.Create("cpuprofile")
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
@@ -106,6 +104,9 @@ func main() {
 	for gt := 0; gt < 10; gt++ {
 		wg.Add(1)
 		go func(gt int) {
+
+			// Initialize the stats used for delta calculations
+			prev_stats := cache.Stats()
 			defer wg.Done()
 
 			// Setup seed for random numbers

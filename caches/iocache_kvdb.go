@@ -20,9 +20,16 @@ import (
 	"github.com/lpabon/bufferio"
 	"github.com/lpabon/foocsim/kvdb"
 	"github.com/lpabon/godbc"
+	"sync"
 )
 
 var buf []byte
+
+type IoCacheRequest struct {
+	put   bool
+	key   string
+	index uint64
+}
 
 type IoCacheKvDB struct {
 	stats        CacheStats
@@ -30,7 +37,15 @@ type IoCacheKvDB struct {
 	cachesize    uint64
 	writethrough bool
 	cacheblocks  *IoCacheBlocks
+	chunksize    uint32
 	db           kvdb.Kvdb
+	chwrite      chan File
+	chread       chan File
+	chstats      chan *CacheStats
+	chstatsreq   chan int
+	chquit       chan int
+	chdbsend     chan IoCacheRequest
+	wg           sync.WaitGroup
 }
 
 func NewIoCacheKvDB(cachesize uint64, writethrough bool, chunksize uint32, dbtype string) *IoCacheKvDB {
@@ -42,6 +57,20 @@ func NewIoCacheKvDB(cachesize uint64, writethrough bool, chunksize uint32, dbtyp
 	cache.cachemap = make(map[string]uint64)
 	cache.cachesize = cachesize
 	cache.writethrough = writethrough
+	cache.chunksize = chunksize
+
+	cache.chwrite = make(chan File)
+	cache.chread = make(chan File)
+	cache.chquit = make(chan int)
+	cache.chstats = make(chan *CacheStats)
+	cache.chstatsreq = make(chan int)
+	cache.chdbsend = make(chan IoCacheRequest, 32)
+
+	cache.server()
+	cache.ioserver()
+	//cache.ioget()
+	cache.wg.Add(2)
+
 	buf = make([]byte, chunksize)
 
 	switch dbtype {
@@ -64,7 +93,59 @@ func NewIoCacheKvDB(cachesize uint64, writethrough bool, chunksize uint32, dbtyp
 }
 
 func (c *IoCacheKvDB) Close() {
+	close(c.chquit)
+	c.wg.Wait()
 	c.db.Close()
+}
+
+func (c *IoCacheKvDB) server() {
+	go func() {
+		defer c.wg.Done()
+		for {
+			select {
+			case f := <-c.chwrite:
+				c.write(f.obj, f.chunk)
+			case f := <-c.chread:
+				c.read(f.obj, f.chunk)
+			case <-c.chstatsreq:
+				c.chstats <- c.stats.Copy()
+			case <-c.chquit:
+				close(c.chdbsend)
+				return
+			}
+		}
+	}()
+
+}
+
+func (c *IoCacheKvDB) ioserver() {
+	go func() {
+
+		defer c.wg.Done()
+		for req := range c.chdbsend {
+			if !req.put {
+				val, err := c.db.Get([]byte(req.key), req.index)
+				godbc.Check(err == nil)
+
+				// Check Data returned.
+				var indexcheck uint64
+				keycheck := make([]byte, len(req.key))
+				b := bufferio.NewBufferIO(val)
+				b.Read(keycheck)
+				b.ReadDataLE(&indexcheck)
+				godbc.Check(indexcheck == req.index, fmt.Sprintf("index[%v] != %v", req.index, indexcheck))
+				godbc.Check(req.key == string(keycheck), fmt.Sprintf("key[%s] != %s", req.key, keycheck))
+			} else {
+				b := bufferio.NewBufferIOMake(int(c.chunksize))
+				b.Write([]byte(req.key))
+				b.WriteDataLE(req.index)
+
+				c.db.Put([]byte(req.key), b.Bytes(), req.index)
+			}
+
+		}
+	}()
+
 }
 
 func (c *IoCacheKvDB) Invalidate(key string) {
@@ -92,14 +173,14 @@ func (c *IoCacheKvDB) Insert(key string) {
 	// Insert new key in cache map
 	c.cachemap[key] = index
 
-	b := bufferio.NewBufferIO(buf)
-	b.Write([]byte(key))
-	b.WriteDataLE(index)
-
-	c.db.Put([]byte(key), buf, index)
+	c.chdbsend <- IoCacheRequest{
+		put:   true,
+		key:   key,
+		index: index,
+	}
 }
 
-func (c *IoCacheKvDB) Write(obj string, chunk string) {
+func (c *IoCacheKvDB) write(obj string, chunk string) {
 	c.stats.writes++
 
 	key := obj + chunk
@@ -115,7 +196,13 @@ func (c *IoCacheKvDB) Write(obj string, chunk string) {
 	}
 }
 
-func (c *IoCacheKvDB) Read(obj, chunk string) {
+func (c *IoCacheKvDB) Write(obj string, chunk string) {
+
+	c.chwrite <- File{obj, chunk}
+
+}
+
+func (c *IoCacheKvDB) read(obj, chunk string) {
 	c.stats.reads++
 
 	key := obj + chunk
@@ -127,23 +214,23 @@ func (c *IoCacheKvDB) Read(obj, chunk string) {
 		// Clock Algorithm: Set that we looked
 		// at it
 		c.cacheblocks.Using(index)
-		val, err := c.db.Get([]byte(key), index)
-		godbc.Check(err == nil)
 
-		// Check Data returned.
-		var indexcheck uint64
-		keycheck := make([]byte, len(key))
-		b := bufferio.NewBufferIO(val)
-		b.Read(keycheck)
-		b.ReadDataLE(&indexcheck)
-		godbc.Check(indexcheck == index, fmt.Sprintf("index[%v] != %v", index, indexcheck))
-		godbc.Check(key == string(keycheck), fmt.Sprintf("key[%s] != %s", key, keycheck))
+		c.chdbsend <- IoCacheRequest{
+			put:   false,
+			key:   key,
+			index: index,
+		}
 
 	} else {
 		// Read miss
 		// We would do IO here
 		c.Insert(key)
 	}
+}
+
+func (c *IoCacheKvDB) Read(obj, chunk string) {
+
+	c.chread <- File{obj, chunk}
 }
 
 func (c *IoCacheKvDB) Delete(obj string) {
@@ -160,5 +247,6 @@ func (c *IoCacheKvDB) String() string {
 }
 
 func (c *IoCacheKvDB) Stats() *CacheStats {
-	return c.stats.Copy()
+	c.chstatsreq <- 1
+	return <-c.chstats
 }
