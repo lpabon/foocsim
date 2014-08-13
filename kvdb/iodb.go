@@ -70,18 +70,20 @@ func (d *IoStatDuration) String() string {
 }
 
 type IoStats struct {
-	ramhits     uint64
-	storagehits uint64
-	wraps       uint64
-	seg_skipped uint64
-	readtime    *IoStatDuration
-	writetime   *IoStatDuration
+	ramhits         uint64
+	storagehits     uint64
+	wraps           uint64
+	seg_skipped     uint64
+	readtime        *IoStatDuration
+	segmentreadtime *IoStatDuration
+	writetime       *IoStatDuration
 }
 
 func NewIoStats() *IoStats {
 
 	stats := &IoStats{}
 	stats.readtime = &IoStatDuration{}
+	stats.segmentreadtime = &IoStatDuration{}
 	stats.writetime = &IoStatDuration{}
 
 	return stats
@@ -116,6 +118,10 @@ func (s *IoStats) WriteTimeRecord(d time.Duration) {
 	s.writetime.Add(d)
 }
 
+func (s *IoStats) SegmentReadTimeRecord(d time.Duration) {
+	s.segmentreadtime.Add(d)
+}
+
 func (s *IoStats) RamHitRate() float64 {
 	hits := s.ramhits + s.storagehits
 	if 0 == hits {
@@ -132,6 +138,7 @@ func (s *IoStats) String() string {
 		"Wraps: %v\n"+
 		"Segments Skipped: %v\n"+
 		"Mean Read Latency: %.2f usec\n"+
+		"Mean Segment Read Latency: %.2f usec\n"+
 		"Mean Write Latency: %.2f usec\n",
 		s.RamHitRate(),
 		s.ramhits,
@@ -139,6 +146,7 @@ func (s *IoStats) String() string {
 		s.wraps,
 		s.seg_skipped,
 		s.readtime.MeanTimeUsecs(),
+		s.segmentreadtime.MeanTimeUsecs(),
 		s.writetime.MeanTimeUsecs()) // + s.readtime.String() + s.writetime.String()
 }
 
@@ -261,7 +269,7 @@ func (c *KVIoDB) sync() {
 		start := time.Now()
 		n, err := c.fp.ReadAt(c.segments[c.segment].segmentbuf, int64(c.segments[c.segment].offset))
 		end := time.Now()
-		c.stats.ReadTimeRecord(end.Sub(start))
+		c.stats.SegmentReadTimeRecord(end.Sub(start))
 		godbc.Check(n == len(c.segments[c.segment].segmentbuf))
 		godbc.Check(err == nil)
 	}
@@ -273,7 +281,7 @@ func (c *KVIoDB) Close() {
 	close(c.chwriting)
 	<-c.chquit
 	c.fp.Close()
-	fmt.Printf("== IoDB Stats ==\n" + c.stats.String())
+	fmt.Print("== IoDB Stats ==\n" + c.stats.String())
 }
 
 func (c *KVIoDB) offset(index uint64) uint64 {
