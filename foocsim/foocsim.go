@@ -26,6 +26,7 @@ import (
 	"os"
 	"runtime/pprof"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -61,8 +62,6 @@ var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use."+
 
 func main() {
 
-	var filezipf *zipfworkload.ZipfWorkload
-
 	// Parse flags
 	flag.Parse()
 
@@ -72,9 +71,6 @@ func main() {
 	godbc.Check(0 <= (*fread_percent) && (*fread_percent) <= 100, "reads must be between 0 and 100")
 	godbc.Check(0 <= (*fdeletion_percent) && (*fdeletion_percent) <= 100, "deletions must be between 0 and 100")
 
-	// Setup seed for random numbers
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	// Config
 	chunksize := *fchunksize * KB
 	maxfilesize := (int64(MB) * (*fmaxfilesize)) / int64(chunksize) // Up to 1 TB in 256k chunks
@@ -82,30 +78,7 @@ func main() {
 	numfiles := *fnumfiles
 	filedistribution_zipf := *ffiledistribution_zipf
 
-	// Determine distribution type
-	if filedistribution_zipf {
-		filezipf = zipfworkload.NewZipfWorkload(uint64(numfiles), 0)
-	}
-
-	// Create simulated files
-	files := make([]*SimFile, numfiles)
-	for file := 0; file < numfiles; file++ {
-		files[file] = &SimFile{}
-		if *frandomfilesize {
-			files[file].size = uint64(r.Int63n(maxfilesize)) + uint64(1) // in case we get 0
-		} else {
-			files[file].size = uint64(maxfilesize)
-		}
-		files[file].iogen = zipfworkload.NewZipfWorkload(files[file].size, (*fread_percent))
-	}
-
 	// Print here Simulation information, also Mean file size and std deviation
-
-	// Setup file to write cache metrics
-	fp, err := os.Create("cache.data")
-	godbc.Check(err == nil)
-	defer fp.Close()
-	metrics := bufio.NewWriter(fp)
 
 	// Create the cache
 	var cache caches.Caches
@@ -127,42 +100,79 @@ func main() {
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
 	// Begin the simulation
-	for io := 0; io < (*fnumios); io++ {
+	var wg sync.WaitGroup
+	for gt := 0; gt < 10; gt++ {
+		wg.Add(1)
+		go func(gt int) {
+			defer wg.Done()
 
-		// Save metrics
-		if (io % (*fdataperiod)) == 0 {
-			stats := cache.Stats()
-			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + stats.DumpDelta(prev_stats))
+			// Setup seed for random numbers
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+			// Create simulated files
+			files := make([]*SimFile, numfiles)
+			for file := 0; file < numfiles; file++ {
+				files[file] = &SimFile{}
+				if *frandomfilesize {
+					files[file].size = uint64(r.Int63n(maxfilesize)) + uint64(1) // in case we get 0
+				} else {
+					files[file].size = uint64(maxfilesize)
+				}
+				files[file].iogen = zipfworkload.NewZipfWorkload(files[file].size, (*fread_percent))
+			}
+
+			// Determine distribution type
+			var filezipf *zipfworkload.ZipfWorkload
+			if filedistribution_zipf {
+				filezipf = zipfworkload.NewZipfWorkload(uint64(numfiles), 0)
+			}
+
+			// Setup file to write cache metrics
+			fp, err := os.Create(fmt.Sprintf("cache%d.data", gt))
 			godbc.Check(err == nil)
+			defer fp.Close()
+			metrics := bufio.NewWriter(fp)
 
-			// Now copy the data
-			prev_stats = stats
-		}
+			for io := 0; io < (*fnumios); io++ {
 
-		// Get the file
-		var file uint64
-		if filedistribution_zipf {
-			file, _ = filezipf.ZipfGenerate()
-		} else {
-			// Random Distribution
-			file = uint64(r.Int63n(int64(numfiles)))
-		}
-		godbc.Check(int(file) <= numfiles, fmt.Sprintf("file = %v", file))
+				// Save metrics
+				if (io % (*fdataperiod)) == 0 {
+					stats := cache.Stats()
+					_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + stats.DumpDelta(prev_stats))
+					godbc.Check(err == nil)
 
-		// Check if we need to delete this file
-		if rand.Intn(100) < (*fdeletion_percent) {
-			cache.Delete(strconv.FormatUint(file, 10))
-			continue
-		}
+					// Now copy the data
+					prev_stats = stats
+				}
 
-		// Which block on the file
-		chunk, isread := files[file].iogen.ZipfGenerate()
-		if isread {
-			cache.Read(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
-		} else {
-			cache.Write(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
-		}
+				// Get the file
+				var file uint64
+				if filedistribution_zipf {
+					file, _ = filezipf.ZipfGenerate()
+				} else {
+					// Random Distribution
+					file = uint64(r.Int63n(int64(numfiles)))
+				}
+				godbc.Check(int(file) <= numfiles, fmt.Sprintf("file = %v", file))
+
+				// Check if we need to delete this file
+				if rand.Intn(100) < (*fdeletion_percent) {
+					cache.Delete(strconv.FormatUint(file, 10))
+					continue
+				}
+
+				// Which block on the file
+				chunk, isread := files[file].iogen.ZipfGenerate()
+				if isread {
+					cache.Read(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
+				} else {
+					cache.Write(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
+				}
+			}
+			metrics.Flush()
+		}(gt)
 	}
-	metrics.Flush()
+
+	wg.Wait()
 	fmt.Print(cache)
 }

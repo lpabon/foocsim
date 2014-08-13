@@ -19,12 +19,24 @@ import (
 	"fmt"
 	"github.com/lpabon/godbc"
 	"strconv"
+	"sync"
 )
+
+type File struct {
+	obj, chunk string
+}
 
 type SimpleCache struct {
 	cacheobjids  map[string]string
 	cachemap     map[string]int
+	chwrite      chan File
+	chread       chan File
+	chdelete     chan File
+	chstats      chan *CacheStats
+	chstatsreq   chan int
+	chquit       chan int
 	cachesize    uint64
+	wg           sync.WaitGroup
 	writethrough bool
 	stats        CacheStats
 }
@@ -49,11 +61,42 @@ func NewSimpleCache(cachesize uint64, writethrough bool) *SimpleCache {
 	cache.cacheobjids = make(map[string]string)
 	cache.cachemap = make(map[string]int)
 
+	cache.chwrite = make(chan File)
+	cache.chread = make(chan File)
+	cache.chdelete = make(chan File)
+	cache.chquit = make(chan int)
+	cache.chstats = make(chan *CacheStats)
+	cache.chstatsreq = make(chan int)
+
+	cache.server()
+	cache.wg.Add(1)
+
 	godbc.Ensure(cache.cacheobjids != nil)
 	godbc.Ensure(cache.cachemap != nil)
 	godbc.Ensure(cache.cachesize > 0)
 
 	return cache
+}
+
+func (c *SimpleCache) server() {
+	go func() {
+		defer c.wg.Done()
+		for {
+			select {
+			case f := <-c.chwrite:
+				c.write(f.obj, f.chunk)
+			case f := <-c.chread:
+				c.read(f.obj, f.chunk)
+			case f := <-c.chdelete:
+				c.delete(f.obj)
+			case <-c.chstatsreq:
+				c.chstats <- c.stats.Copy()
+			case <-c.chquit:
+				return
+			}
+		}
+	}()
+
 }
 
 func (c *SimpleCache) getObjKey(obj string) string {
@@ -66,8 +109,9 @@ func (c *SimpleCache) getObjKey(obj string) string {
 	}
 }
 
-func (s *SimpleCache) Close() {
-
+func (c *SimpleCache) Close() {
+	close(c.chquit)
+	c.wg.Wait()
 }
 
 func (c *SimpleCache) Invalidate(chunkkey string) {
@@ -109,7 +153,7 @@ func (c *SimpleCache) Insert(chunkkey string) {
 	c.cachemap[chunkkey] = 1
 }
 
-func (c *SimpleCache) Write(obj string, chunk string) {
+func (c *SimpleCache) write(obj, chunk string) {
 	c.stats.writes++
 
 	key := c.getObjKey(obj) + chunk
@@ -125,9 +169,14 @@ func (c *SimpleCache) Write(obj string, chunk string) {
 	}
 }
 
-func (c *SimpleCache) Read(obj, chunk string) {
-	c.stats.reads++
+func (c *SimpleCache) Write(obj string, chunk string) {
 
+	c.chwrite <- File{obj, chunk}
+
+}
+
+func (c *SimpleCache) read(obj, chunk string) {
+	c.stats.reads++
 	key := c.getObjKey(obj) + chunk
 
 	if _, ok := c.cachemap[key]; ok {
@@ -144,13 +193,22 @@ func (c *SimpleCache) Read(obj, chunk string) {
 	}
 }
 
-func (c *SimpleCache) Delete(obj string) {
-	c.stats.deletions++
+func (c *SimpleCache) Read(obj, chunk string) {
 
+	c.chread <- File{obj, chunk}
+}
+
+func (c *SimpleCache) delete(obj string) {
+	c.stats.deletions++
 	if _, ok := c.cacheobjids[obj]; ok {
 		c.stats.deletionhits++
 		delete(c.cacheobjids, obj)
 	}
+}
+
+func (c *SimpleCache) Delete(obj string) {
+
+	c.chdelete <- File{obj: obj}
 }
 
 func (c *SimpleCache) String() string {
@@ -162,5 +220,6 @@ func (c *SimpleCache) String() string {
 }
 
 func (c *SimpleCache) Stats() *CacheStats {
-	return c.stats.Copy()
+	c.chstatsreq <- 1
+	return <-c.chstats
 }
