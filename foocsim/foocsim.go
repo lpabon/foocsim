@@ -127,6 +127,7 @@ func main() {
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
 	// Begin the simulation
+	start := time.Now()
 	for io := 0; io < (*fnumios); io++ {
 
 		// Save metrics
@@ -163,6 +164,8 @@ func main() {
 			cache.Write(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
 		}
 	}
+	end := time.Now()
 	metrics.Flush()
 	fmt.Print(cache)
+	fmt.Print("\nTotal Time: " + end.Sub(start).String() + "\n")
 }
