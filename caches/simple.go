@@ -26,7 +26,7 @@ type SimpleCache struct {
 	cachemap     map[string]int
 	cachesize    uint64
 	writethrough bool
-	stats        CacheStats
+	stats        *CacheStats
 }
 
 func cacheCreateObjKey(obj string) func() string {
@@ -45,6 +45,7 @@ func NewSimpleCache(cachesize uint64, writethrough bool) *SimpleCache {
 
 	cache := &SimpleCache{}
 	cache.cachesize = cachesize
+	cache.stats = NewCacheStats()
 	cache.writethrough = writethrough
 	cache.cacheobjids = make(map[string]string)
 	cache.cachemap = make(map[string]int)

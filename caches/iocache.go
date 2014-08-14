@@ -77,7 +77,7 @@ func (c *IoCacheBlocks) Free(index uint64) {
 /* -------------------------------------------------------- */
 
 type IoCache struct {
-	stats        CacheStats
+	stats        *CacheStats
 	cachemap     map[string]uint64
 	cachesize    uint64
 	writethrough bool
@@ -88,6 +88,7 @@ func NewIoCache(cachesize uint64, writethrough bool) *IoCache {
 	godbc.Require(cachesize > 0)
 
 	cache := &IoCache{}
+	cache.stats = NewCacheStats()
 	cache.cacheblocks = NewIoCacheBlocks(cachesize)
 	cache.cachemap = make(map[string]uint64)
 	cache.cachesize = cachesize

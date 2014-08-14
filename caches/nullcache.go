@@ -20,11 +20,11 @@ import (
 )
 
 type NullCache struct {
-	stats CacheStats
+	stats *CacheStats
 }
 
 func NewNullCache() *NullCache {
-	return &NullCache{}
+	return &NullCache{stats: NewCacheStats()}
 }
 
 func (n *NullCache) Close() {

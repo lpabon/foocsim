@@ -20,12 +20,13 @@ import (
 	"github.com/lpabon/bufferio"
 	"github.com/lpabon/foocsim/kvdb"
 	"github.com/lpabon/godbc"
+	"time"
 )
 
 var buf []byte
 
 type IoCacheKvDB struct {
-	stats        CacheStats
+	stats        *CacheStats
 	cachemap     map[string]uint64
 	cachesize    uint64
 	writethrough bool
@@ -38,6 +39,7 @@ func NewIoCacheKvDB(cachesize uint64, writethrough bool, chunksize uint32, dbtyp
 	godbc.Require(cachesize > 0)
 
 	cache := &IoCacheKvDB{}
+	cache.stats = NewCacheStats()
 	cache.cacheblocks = NewIoCacheBlocks(cachesize)
 	cache.cachemap = make(map[string]uint64)
 	cache.cachesize = cachesize
@@ -73,7 +75,11 @@ func (c *IoCacheKvDB) Invalidate(key string) {
 		c.stats.invalidations++
 		delete(c.cachemap, key)
 		c.cacheblocks.Free(index)
+
+		start := time.Now()
 		c.db.Delete([]byte(key), index)
+		end := time.Now()
+		c.stats.tdeletions.Add(end.Sub(start))
 	}
 }
 
@@ -86,7 +92,11 @@ func (c *IoCacheKvDB) Insert(key string) {
 	if evictkey != "" {
 		c.stats.evictions++
 		delete(c.cachemap, evictkey)
+
+		start := time.Now()
 		c.db.Delete([]byte(evictkey), index)
+		end := time.Now()
+		c.stats.tdeletions.Add(end.Sub(start))
 	}
 
 	// Insert new key in cache map
@@ -96,7 +106,10 @@ func (c *IoCacheKvDB) Insert(key string) {
 	b.Write([]byte(key))
 	b.WriteDataLE(index)
 
+	start := time.Now()
 	c.db.Put([]byte(key), buf, index)
+	end := time.Now()
+	c.stats.twrites.Add(end.Sub(start))
 }
 
 func (c *IoCacheKvDB) Write(obj string, chunk string) {
@@ -127,7 +140,10 @@ func (c *IoCacheKvDB) Read(obj, chunk string) {
 		// Clock Algorithm: Set that we looked
 		// at it
 		c.cacheblocks.Using(index)
+		start := time.Now()
 		val, err := c.db.Get([]byte(key), index)
+		end := time.Now()
+		c.stats.treads.Add(end.Sub(start))
 		godbc.Check(err == nil)
 
 		// Check Data returned.

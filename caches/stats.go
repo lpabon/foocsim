@@ -17,6 +17,7 @@ package caches
 
 import (
 	"fmt"
+	"github.com/lpabon/foocsim/utils"
 )
 
 type CacheStats struct {
@@ -25,6 +26,17 @@ type CacheStats struct {
 	deletions, deletionhits  int
 	evictions, invalidations int
 	insertions               int
+	treads                   *utils.TimeDuration
+	tdeletions               *utils.TimeDuration
+	twrites                  *utils.TimeDuration
+}
+
+func NewCacheStats() *CacheStats {
+	c := &CacheStats{}
+	c.treads = &utils.TimeDuration{}
+	c.twrites = &utils.TimeDuration{}
+	c.tdeletions = &utils.TimeDuration{}
+	return c
 }
 
 func (c *CacheStats) ReadHitRateDelta(prev *CacheStats) float64 {
@@ -69,6 +81,10 @@ func (c *CacheStats) Copy() *CacheStats {
 	statscopy := &CacheStats{}
 	*statscopy = *c
 
+	statscopy.tdeletions = c.tdeletions.Copy()
+	statscopy.treads = c.treads.Copy()
+	statscopy.twrites = c.twrites.Copy()
+
 	return statscopy
 }
 
@@ -84,7 +100,10 @@ func (c *CacheStats) String() string {
 			"Deletions: %d\n"+
 			"Insertions: %d\n"+
 			"Evictions: %d\n"+
-			"Invalidations: %d\n",
+			"Invalidations: %d\n"+
+			"Mean Read Latency: %.2f usecs\n"+
+			"Mean Write Latency: %.2f usecs\n"+
+			"Mean Delete Latency: %.2f usecs\n",
 		c.ReadHitRate(),
 		c.WriteHitRate(),
 		c.readhits,
@@ -95,7 +114,10 @@ func (c *CacheStats) String() string {
 		c.deletions,
 		c.insertions,
 		c.evictions,
-		c.invalidations)
+		c.invalidations,
+		c.treads.MeanTimeUsecs(),
+		c.twrites.MeanTimeUsecs(),
+		c.tdeletions.MeanTimeUsecs())
 }
 
 func (c *CacheStats) Dump() string {
@@ -110,7 +132,10 @@ func (c *CacheStats) Dump() string {
 			"%d,"+ // Deletions 8
 			"%d,"+ // Insertions 9
 			"%d,"+ // Evictions 10
-			"%d\n", // Invalidations 11
+			"%d,"+ // Invalidations 11
+			"%v,"+ // Mean Reads 12
+			"%v,"+ // Mean Writes 13
+			"%v\n", // Mean Deletes 14
 		c.ReadHitRate(),
 		c.WriteHitRate(),
 		c.readhits,
@@ -121,8 +146,10 @@ func (c *CacheStats) Dump() string {
 		c.deletions,
 		c.insertions,
 		c.evictions,
-		c.invalidations)
-
+		c.invalidations,
+		c.treads.MeanTimeUsecs(),
+		c.twrites.MeanTimeUsecs(),
+		c.tdeletions.MeanTimeUsecs())
 }
 
 func (c *CacheStats) DumpDelta(prev *CacheStats) string {
@@ -137,7 +164,10 @@ func (c *CacheStats) DumpDelta(prev *CacheStats) string {
 			"%d,"+ // Deletions 8
 			"%d,"+ // Insertions 9
 			"%d,"+ // Evictions 10
-			"%d\n", // Invalidations 11
+			"%d,"+ // Invalidations 11
+			"%v,"+ // Mean Reads 12
+			"%v,"+ // Mean Writes 13
+			"%v\n", // Mean Deletes 14
 		c.ReadHitRateDelta(prev),
 		c.WriteHitRateDelta(prev),
 		c.readhits-prev.readhits,
@@ -148,6 +178,8 @@ func (c *CacheStats) DumpDelta(prev *CacheStats) string {
 		c.deletions-prev.deletions,
 		c.insertions-prev.insertions,
 		c.evictions-prev.evictions,
-		c.invalidations-prev.invalidations)
-
+		c.invalidations-prev.invalidations,
+		c.treads.DeltaMeanTimeUsecs(prev.treads),
+		c.twrites.DeltaMeanTimeUsecs(prev.twrites),
+		c.tdeletions.DeltaMeanTimeUsecs(prev.tdeletions))
 }

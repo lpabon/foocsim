@@ -18,6 +18,7 @@ package kvdb
 import (
 	"fmt"
 	"github.com/lpabon/bufferio"
+	"github.com/lpabon/foocsim/utils"
 	"github.com/lpabon/godbc"
 	"os"
 	"syscall"
@@ -45,46 +46,22 @@ type IoSegment struct {
 	written    bool
 }
 
-type IoStatDuration struct {
-	duration int64
-	counter  int64
-}
-
-func (d *IoStatDuration) Add(delta time.Duration) {
-	d.duration += delta.Nanoseconds()
-	d.counter++
-}
-
-func (d *IoStatDuration) MeanTimeUsecs() float64 {
-	if d.counter == 0 {
-		return 0.0
-	}
-	return (float64(d.duration) / float64(d.counter)) / 1000.0
-}
-
-func (d *IoStatDuration) String() string {
-	return fmt.Sprintf("duration = %v\n"+
-		"counter = %v\n",
-		d.duration,
-		d.counter)
-}
-
 type IoStats struct {
 	ramhits         uint64
 	storagehits     uint64
 	wraps           uint64
 	seg_skipped     uint64
-	readtime        *IoStatDuration
-	segmentreadtime *IoStatDuration
-	writetime       *IoStatDuration
+	readtime        *utils.TimeDuration
+	segmentreadtime *utils.TimeDuration
+	writetime       *utils.TimeDuration
 }
 
 func NewIoStats() *IoStats {
 
 	stats := &IoStats{}
-	stats.readtime = &IoStatDuration{}
-	stats.segmentreadtime = &IoStatDuration{}
-	stats.writetime = &IoStatDuration{}
+	stats.readtime = &utils.TimeDuration{}
+	stats.segmentreadtime = &utils.TimeDuration{}
+	stats.writetime = &utils.TimeDuration{}
 
 	return stats
 
