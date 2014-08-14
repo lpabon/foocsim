@@ -24,10 +24,10 @@ set output "cache_evictions.png"
 plot "cache.data" using 1:11 every 5 title "Evictions"
 
 set output "cache_readlatency.png"
-plot "cache.data" using 1:13 every 1 title "Mean Read Latency (usecs)"
+plot "cache.data" using 1:13 every 5 title "Mean Read Latency (usecs)"
 
 set output "cache_writelatency.png"
-plot "cache.data" using 1:14 every 1 title "Mean Write Latency (usecs)"
+plot "cache.data" using 1:14 every 5 title "Mean Write Latency (usecs)"
 
 set output "cache_deletelatency.png"
-plot "cache.data" using 1:15 every 1 title "Mean Delete Latency (usecs)"
+plot "cache.data" using 1:15 every 5 title "Mean Delete Latency (usecs)"
