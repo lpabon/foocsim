@@ -43,7 +43,7 @@ type SimFile struct {
 
 // Command line
 var fchunksize = flag.Int("chunksize", 64, "\n\tChunk size in KB.")
-var fmaxfilesize = flag.Int64("maxfilesize", 8*GB, "\n\tMaximum file size MB.")
+var fmaxfilesize = flag.Int64("maxfilesize", 8*1024*1024, "\n\tMaximum file size MB. Default 8TB.")
 var frandomfilesize = flag.Bool("randomfilesize", false,
 	"\n\tCreate files of random size with a maximum of maxfilesize."+
 		"\n\tIf false, set the file size exactly to maxfilesize.")
@@ -56,8 +56,10 @@ var fwritethrough = flag.Bool("writethrough", true, "\n\tWritethrough or read mi
 var ffiledistribution_zipf = flag.Bool("zipf_filedistribution", true, "\n\tUse a Zipf or Random distribution")
 var fdataperiod = flag.Int("dataperiod", 1000, "\n\tNumber of IOs per data collected")
 var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use."+
-	"\n\tCache types with no IO backend: simple, null, iocache."+
-	"\n\tCache types with IO backends using iocache frontend: leveldb, rocksdb, boltdb, iodb")
+	"\n\tCache types with no IO backend:"+
+	"\n\t\tsimple, null, iocache."+
+	"\n\tCache types with IO backends using iocache frontend:"+
+	"\n\t\tleveldb, rocksdb, boltdb, iodb")
 
 func main() {
 
