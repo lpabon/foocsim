@@ -121,7 +121,6 @@ func main() {
 	default:
 		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), uint32(chunksize), *fcachetype)
 	}
-	defer cache.Close()
 
 	// Initialize the stats used for delta calculations
 	prev_stats := cache.Stats()
@@ -166,6 +165,7 @@ func main() {
 			cache.Write(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
 		}
 	}
+	cache.Close()
 	end := time.Now()
 	metrics.Flush()
 	fmt.Print(cache)

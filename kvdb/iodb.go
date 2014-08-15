@@ -21,6 +21,7 @@ import (
 	"github.com/lpabon/foocsim/utils"
 	"github.com/lpabon/godbc"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -44,6 +45,7 @@ type IoSegment struct {
 	meta       *bufferio.BufferIO
 	offset     uint64
 	written    bool
+	lock       sync.RWMutex
 }
 
 type IoStats struct {
@@ -132,10 +134,11 @@ type KVIoDB struct {
 	blocksize      uint64
 	segmentinfo    IoSegmentInfo
 	segments       []IoSegment
-	segment        int
-	chwriting      chan int
-	chavailable    chan int
-	chquit         chan int
+	segment        *IoSegment
+	chwriting      chan *IoSegment
+	chreader       chan *IoSegment
+	chavailable    chan *IoSegment
+	wg             sync.WaitGroup
 	segmentbuffers int
 	current        uint64
 	numsegments    uint64
@@ -160,17 +163,18 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 	db.numsegments = blocks / db.maxentries
 	db.size = db.numsegments * db.segmentinfo.size
 
+	db.chwriting = make(chan *IoSegment, db.segmentbuffers)
+	db.chavailable = make(chan *IoSegment, db.segmentbuffers)
+	db.chreader = make(chan *IoSegment, db.segmentbuffers)
+
 	db.segments = make([]IoSegment, db.segmentbuffers)
-	db.chwriting = make(chan int, db.segmentbuffers)
-	db.chavailable = make(chan int, db.segmentbuffers)
-	db.chquit = make(chan int)
 	for i := 0; i < db.segmentbuffers; i++ {
 		db.segments[i].segmentbuf = make([]byte, db.segmentinfo.size)
 		db.segments[i].data = bufferio.NewBufferIO(db.segments[i].segmentbuf[:db.segmentinfo.datasize])
 		db.segments[i].meta = bufferio.NewBufferIO(db.segments[i].segmentbuf[db.segmentinfo.datasize:])
 
 		// Fill ch available with all the available buffers
-		db.chavailable <- i
+		db.chavailable <- &db.segments[i]
 	}
 	db.segment = <-db.chavailable
 
@@ -178,40 +182,83 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 	db.fp, err = os.OpenFile(dbpath, syscall.O_DIRECT|os.O_CREATE|os.O_RDWR, os.ModePerm)
 	godbc.Check(err == nil)
 
-	// Start writer thread
+	// Start goroutines
 	db.writer()
+	db.reader()
 
 	godbc.Ensure(db.blocksize == uint64(blocksize))
 	godbc.Ensure(db.chwriting != nil)
 	godbc.Ensure(db.chavailable != nil)
-	godbc.Ensure(db.chquit != nil)
+	godbc.Ensure(db.chreader != nil)
 	godbc.Ensure(db.segmentbuffers == len(db.segments))
 	godbc.Ensure((db.segmentbuffers - 1) == len(db.chavailable))
-	godbc.Ensure(0 == len(db.chquit))
+	godbc.Ensure(0 == len(db.chreader))
 	godbc.Ensure(0 == len(db.chwriting))
-	godbc.Ensure(0 == db.segment)
+	godbc.Ensure(nil != db.segment)
 
 	return db
 }
 
 func (c *KVIoDB) writer() {
 
+	c.wg.Add(1)
 	go func() {
-		for i := range c.chwriting {
-			if c.segments[i].written {
+		defer c.wg.Done()
+		for s := range c.chwriting {
+			if s.written {
 				start := time.Now()
-				n, err := c.fp.WriteAt(c.segments[i].segmentbuf, int64(c.segments[i].offset))
+				n, err := c.fp.WriteAt(s.segmentbuf, int64(s.offset))
 				end := time.Now()
+				s.written = false
+
 				c.stats.WriteTimeRecord(end.Sub(start))
-				godbc.Check(n == len(c.segments[i].segmentbuf))
+				godbc.Check(n == len(s.segmentbuf))
 				godbc.Check(err == nil)
-				c.segments[i].written = false
 			} else {
 				c.stats.SegmentSkipped()
 			}
-			c.chavailable <- i
+			c.chreader <- s
 		}
-		close(c.chquit)
+		close(c.chreader)
+	}()
+
+}
+
+func (c *KVIoDB) reader() {
+
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		for s := range c.chreader {
+			s.lock.Lock()
+
+			// Reset the bufferIO managers
+			s.data.Reset()
+			s.meta.Reset()
+
+			// Move to the next offset
+			c.current += c.segmentinfo.size
+			c.current = c.current % c.size
+
+			if 0 == c.current {
+				c.stats.Wrapped()
+				c.wrapped = true
+			}
+			s.offset = c.current
+
+			if c.wrapped {
+				start := time.Now()
+				n, err := c.fp.ReadAt(s.segmentbuf, int64(s.offset))
+				end := time.Now()
+				c.stats.SegmentReadTimeRecord(end.Sub(start))
+				godbc.Check(n == len(s.segmentbuf))
+				godbc.Check(err == nil)
+			}
+
+			s.lock.Unlock()
+
+			c.chavailable <- s
+		}
 	}()
 
 }
@@ -222,41 +269,12 @@ func (c *KVIoDB) sync() {
 
 	// Get a new available buffer
 	c.segment = <-c.chavailable
-	godbc.Check(c.segment < c.segmentbuffers)
-
-	// Reset the bufferIO managers
-	c.segments[c.segment].data.Reset()
-	c.segments[c.segment].meta.Reset()
-
-	// Move to the next offset
-	c.current += c.segmentinfo.size
-	c.current = c.current % c.size
-	if 0 == c.current {
-		c.stats.Wrapped()
-		c.wrapped = true
-	}
-	c.segments[c.segment].offset = c.current
-
-	// Ok, we have wrapped around.  We need to read the data
-	// on the storage device back into the segment.  That way
-	// we will only write the indexes that have been evicted.
-	// Also, if non are written, we have atleast preloaded it into
-	// memory for read hits.
-	if c.wrapped {
-		start := time.Now()
-		n, err := c.fp.ReadAt(c.segments[c.segment].segmentbuf, int64(c.segments[c.segment].offset))
-		end := time.Now()
-		c.stats.SegmentReadTimeRecord(end.Sub(start))
-		godbc.Check(n == len(c.segments[c.segment].segmentbuf))
-		godbc.Check(err == nil)
-	}
-
 }
 
 func (c *KVIoDB) Close() {
 	c.sync()
 	close(c.chwriting)
-	<-c.chquit
+	c.wg.Wait()
 	c.fp.Close()
 }
 
@@ -264,11 +282,11 @@ func (c *KVIoDB) offset(index uint64) uint64 {
 	return (index*c.blocksize + (index/c.maxentries)*c.segmentinfo.metadatasize)
 }
 
-func (c *KVIoDB) inRange(index uint64, segment int) bool {
+func (c *KVIoDB) inRange(index uint64, s *IoSegment) bool {
 	offset := c.offset(index)
 
-	return ((offset >= c.segments[segment].offset) &&
-		(offset < (c.segments[segment].offset + c.segmentinfo.datasize)))
+	return ((offset >= s.offset) &&
+		(offset < (s.offset + c.segmentinfo.datasize)))
 }
 
 func (c *KVIoDB) Put(key, val []byte, index uint64) error {
@@ -281,16 +299,16 @@ func (c *KVIoDB) Put(key, val []byte, index uint64) error {
 
 	godbc.Require(c.inRange(index, c.segment),
 		fmt.Sprintf("[%v - %v - %v]",
-			c.segments[c.segment].offset,
+			c.segment.offset,
 			offset,
-			c.segments[c.segment].offset+c.segmentinfo.datasize))
+			c.segment.offset+c.segmentinfo.datasize))
 
-	n, err := c.segments[c.segment].data.WriteAt(val, int64(offset-c.segments[c.segment].offset))
+	n, err := c.segment.data.WriteAt(val, int64(offset-c.segment.offset))
 	godbc.Check(n == len(val))
 	godbc.Check(err == nil)
 
-	c.segments[c.segment].written = true
-	c.segments[c.segment].meta.Write([]byte(key))
+	c.segment.written = true
+	c.segment.meta.Write([]byte(key))
 
 	return nil
 }
@@ -306,19 +324,24 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 	// Check if the data is in RAM.  Go through each buffered segment
 	for i := 0; i < c.segmentbuffers; i++ {
 
+		c.segments[i].lock.RLock()
+
 		if (offset >= c.segments[i].offset) &&
 			(offset < (c.segments[i].offset + c.segmentinfo.datasize)) {
 
 			n, err = c.segments[i].data.ReadAt(buf, int64(offset-c.segments[i].offset))
 
 			godbc.Check(uint64(n) == c.blocksize,
-				fmt.Sprintf("Read %v expected:%v from location:%v index:%v current:%v",
-					n, c.blocksize, offset, index, c.current))
+				fmt.Sprintf("Read %v expected:%v from location:%v index:%v",
+					n, c.blocksize, offset, index))
 			godbc.Check(err == nil)
 			c.stats.RamHit()
 
+			c.segments[i].lock.RUnlock()
 			return buf, nil
 		}
+
+		c.segments[i].lock.RUnlock()
 	}
 
 	// Read from storage
@@ -328,8 +351,8 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 	c.stats.ReadTimeRecord(end.Sub(start))
 
 	godbc.Check(uint64(n) == c.blocksize,
-		fmt.Sprintf("Read %v expected %v from location %v index %v current:%v",
-			n, c.blocksize, offset, index, c.current))
+		fmt.Sprintf("Read %v expected %v from location %v index %v",
+			n, c.blocksize, offset, index))
 	godbc.Check(err == nil)
 	c.stats.StorageHit()
 
