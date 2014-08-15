@@ -53,6 +53,8 @@ type IoStats struct {
 	storagehits     uint64
 	wraps           uint64
 	seg_skipped     uint64
+	bufferhits      uint64
+	totalhits       uint64
 	readtime        *utils.TimeDuration
 	segmentreadtime *utils.TimeDuration
 	writetime       *utils.TimeDuration
@@ -73,16 +75,23 @@ func (s *IoStats) Close() {
 
 }
 
+func (s *IoStats) BufferHit() {
+	s.bufferhits++
+	s.totalhits++
+}
+
 func (s *IoStats) SegmentSkipped() {
 	s.seg_skipped++
 }
 
 func (s *IoStats) RamHit() {
 	s.ramhits++
+	s.totalhits++
 }
 
 func (s *IoStats) StorageHit() {
 	s.storagehits++
+	s.totalhits++
 }
 
 func (s *IoStats) Wrapped() {
@@ -102,17 +111,26 @@ func (s *IoStats) SegmentReadTimeRecord(d time.Duration) {
 }
 
 func (s *IoStats) RamHitRate() float64 {
-	hits := s.ramhits + s.storagehits
-	if 0 == hits {
+	if 0 == s.totalhits {
 		return 0.0
 	} else {
-		return float64(s.ramhits) / float64(hits)
+		return float64(s.ramhits) / float64(s.totalhits)
+	}
+}
+
+func (s *IoStats) BufferHitRate() float64 {
+	if 0 == s.totalhits {
+		return 0.0
+	} else {
+		return float64(s.bufferhits) / float64(s.totalhits)
 	}
 }
 
 func (s *IoStats) String() string {
 	return fmt.Sprintf("Ram Hit Rate: %.4f\n"+
 		"Ram Hits: %v\n"+
+		"Buffer Hit Rate: %.4f\n"+
+		"Buffer Hits: %v\n"+
 		"Storage Hits: %v\n"+
 		"Wraps: %v\n"+
 		"Segments Skipped: %v\n"+
@@ -121,6 +139,8 @@ func (s *IoStats) String() string {
 		"Mean Write Latency: %.2f usec\n",
 		s.RamHitRate(),
 		s.ramhits,
+		s.BufferHitRate(),
+		s.bufferhits,
 		s.storagehits,
 		s.wraps,
 		s.seg_skipped,
@@ -146,6 +166,7 @@ type KVIoDB struct {
 	fp             *os.File
 	wrapped        bool
 	stats          *IoStats
+	bc             *BufferCache
 }
 
 func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
@@ -162,6 +183,7 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 	db.segmentinfo.size = db.segmentinfo.metadatasize + db.segmentinfo.datasize
 	db.numsegments = blocks / db.maxentries
 	db.size = db.numsegments * db.segmentinfo.size
+	db.bc = NewBufferCache(db.size/100, uint64(db.blocksize))
 
 	db.chwriting = make(chan *IoSegment, db.segmentbuffers)
 	db.chavailable = make(chan *IoSegment, db.segmentbuffers)
@@ -303,6 +325,7 @@ func (c *KVIoDB) Put(key, val []byte, index uint64) error {
 			offset,
 			c.segment.offset+c.segmentinfo.datasize))
 
+	c.bc.Invalidate(index)
 	n, err := c.segment.data.WriteAt(val, int64(offset-c.segment.offset))
 	godbc.Check(n == len(val))
 	godbc.Check(err == nil)
@@ -320,6 +343,12 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 
 	buf := make([]byte, c.blocksize)
 	offset := c.offset(index)
+
+	err = c.bc.Get(index, buf)
+	if err == nil {
+		c.stats.BufferHit()
+		return buf, nil
+	}
 
 	// Check if the data is in RAM.  Go through each buffered segment
 	for i := 0; i < c.segmentbuffers; i++ {
@@ -355,6 +384,9 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 			n, c.blocksize, offset, index))
 	godbc.Check(err == nil)
 	c.stats.StorageHit()
+
+	// Save in buffer cache
+	c.bc.Set(index, buf)
 
 	return buf, nil
 }
