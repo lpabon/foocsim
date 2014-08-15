@@ -325,7 +325,7 @@ func (c *KVIoDB) Put(key, val []byte, index uint64) error {
 			offset,
 			c.segment.offset+c.segmentinfo.datasize))
 
-	c.bc.Invalidate(index)
+	c.bc.Set(index, val)
 	n, err := c.segment.data.WriteAt(val, int64(offset-c.segment.offset))
 	godbc.Check(n == len(val))
 	godbc.Check(err == nil)

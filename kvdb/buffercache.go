@@ -62,8 +62,15 @@ func (c *BufferCache) remove(index uint64) {
 }
 
 func (c *BufferCache) Set(key uint64, buf []byte) (err error) {
+
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
+	// Yes i know its the same as Invalides.. I'll fix it later!
+	// :-)
+	if index, ok := c.keymap[key]; ok {
+		c.remove(index)
+	}
 
 	for {
 		for ; c.index < uint64(len(c.cacheblocks)); c.index++ {
