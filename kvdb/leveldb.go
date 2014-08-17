@@ -27,7 +27,7 @@ type KVLevelDB struct {
 	wo *levigo.WriteOptions
 }
 
-func NewKVLevelDB(dbpath string) *KVLevelDB {
+func NewKVLevelDB(dbpath string, blocks, bcsize uint64, blocksize uint32) *KVLevelDB {
 
 	var err error
 
@@ -37,7 +37,7 @@ func NewKVLevelDB(dbpath string) *KVLevelDB {
 
 	// Set Options
 	opts := levigo.NewOptions()
-	opts.SetCache(levigo.NewLRUCache(3 << 30))
+	opts.SetCache(levigo.NewLRUCache(int(bcsize)))
 	opts.SetCreateIfMissing(true)
 
 	db.db, err = levigo.Open(dbpath, opts)

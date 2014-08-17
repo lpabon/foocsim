@@ -48,6 +48,7 @@ var frandomfilesize = flag.Bool("randomfilesize", false,
 	"\n\tCreate files of random size with a maximum of maxfilesize."+
 		"\n\tIf false, set the file size exactly to maxfilesize.")
 var fcachesize = flag.Uint64("cachesize", 8, "\n\tCache size in GB.")
+var fbcpercent = flag.Float64("bcpercent", 0.1, "\n\tBuffer Cache size as a percentage of the cache size")
 var fnumfiles = flag.Int("numfiles", 1, "\n\tNumber of files")
 var fnumios = flag.Int("ios", 5000000, "\n\tNumber of IOs")
 var fdeletion_percent = flag.Int("deletions", 0, "\n\t% of File deletions")
@@ -79,8 +80,8 @@ func main() {
 
 	// Config
 	chunksize := *fchunksize * KB
-	maxfilesize := (int64(MB) * (*fmaxfilesize)) / int64(chunksize) // Up to 1 TB in 256k chunks
-	cachesize := (uint64(GB) * (*fcachesize)) / uint64(chunksize)   // 16 GB divided into 256k chunks
+	maxfilesize := (int64(MB) * (*fmaxfilesize)) / int64(chunksize)
+	cachesize := (uint64(GB) * (*fcachesize)) / uint64(chunksize)
 	numfiles := *fnumfiles
 	filedistribution_zipf := *ffiledistribution_zipf
 
@@ -119,7 +120,9 @@ func main() {
 	case "iocache":
 		cache = caches.NewIoCache(cachesize, (*fwritethrough))
 	default:
-		cache = caches.NewIoCacheKvDB(cachesize, (*fwritethrough), uint32(chunksize), *fcachetype)
+		// buffer cache = cache size * fbcpercent %
+		bcsize := uint64(float64((uint64(GB) * (*fcachesize))) * (*fbcpercent / 100.0))
+		cache = caches.NewIoCacheKvDB(cachesize, bcsize, (*fwritethrough), uint32(chunksize), *fcachetype)
 	}
 
 	// Initialize the stats used for delta calculations

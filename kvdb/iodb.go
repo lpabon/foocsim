@@ -17,6 +17,7 @@ package kvdb
 
 import (
 	"fmt"
+	"github.com/lpabon/buffercache"
 	"github.com/lpabon/bufferio"
 	"github.com/lpabon/foocsim/utils"
 	"github.com/lpabon/godbc"
@@ -166,10 +167,10 @@ type KVIoDB struct {
 	fp             *os.File
 	wrapped        bool
 	stats          *IoStats
-	bc             *BufferCache
+	bc             buffercache.BufferCache
 }
 
-func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
+func NewKVIoDB(dbpath string, blocks, bcsize uint64, blocksize uint32) *KVIoDB {
 
 	var err error
 
@@ -183,12 +184,20 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 	db.segmentinfo.size = db.segmentinfo.metadatasize + db.segmentinfo.datasize
 	db.numsegments = blocks / db.maxentries
 	db.size = db.numsegments * db.segmentinfo.size
-	db.bc = NewBufferCache(db.size/100, uint64(db.blocksize))
 
+	// Create buffer cache
+	db.bc = buffercache.NewClockCache(bcsize, uint64(db.blocksize))
+
+	// Segment channel state machine:
+	// 		-> Client writes available segment
+	// 		-> Segment written to storage
+	// 		-> Segment read from storage
+	// 		-> Segment available
 	db.chwriting = make(chan *IoSegment, db.segmentbuffers)
 	db.chavailable = make(chan *IoSegment, db.segmentbuffers)
 	db.chreader = make(chan *IoSegment, db.segmentbuffers)
 
+	// Set up each of the segments
 	db.segments = make([]IoSegment, db.segmentbuffers)
 	for i := 0; i < db.segmentbuffers; i++ {
 		db.segments[i].segmentbuf = make([]byte, db.segmentinfo.size)
@@ -198,8 +207,11 @@ func NewKVIoDB(dbpath string, blocks uint64, blocksize uint32) *KVIoDB {
 		// Fill ch available with all the available buffers
 		db.chavailable <- &db.segments[i]
 	}
+
+	// Set up the first available segment
 	db.segment = <-db.chavailable
 
+	// Open the storage device
 	os.Remove(dbpath)
 	db.fp, err = os.OpenFile(dbpath, syscall.O_DIRECT|os.O_CREATE|os.O_RDWR, os.ModePerm)
 	godbc.Check(err == nil)

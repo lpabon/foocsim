@@ -54,7 +54,7 @@ func (c *IoCacheBlocks) Insert(key string) (evictkey string, newindex uint64, er
 				newindex = c.index
 				err = nil
 				c.cacheblocks[c.index].key = key
-				c.cacheblocks[c.index].mru = true
+				c.cacheblocks[c.index].mru = false
 				c.cacheblocks[c.index].used = true
 				c.index++
 				return

@@ -34,7 +34,7 @@ type IoCacheKvDB struct {
 	db           kvdb.Kvdb
 }
 
-func NewIoCacheKvDB(cachesize uint64, writethrough bool, chunksize uint32, dbtype string) *IoCacheKvDB {
+func NewIoCacheKvDB(cachesize, bcsize uint64, writethrough bool, chunksize uint32, dbtype string) *IoCacheKvDB {
 
 	godbc.Require(cachesize > 0)
 
@@ -44,17 +44,18 @@ func NewIoCacheKvDB(cachesize uint64, writethrough bool, chunksize uint32, dbtyp
 	cache.cachemap = make(map[string]uint64)
 	cache.cachesize = cachesize
 	cache.writethrough = writethrough
+
 	buf = make([]byte, chunksize)
 
 	switch dbtype {
 	case "leveldb":
-		cache.db = kvdb.NewKVLevelDB("cache.ioleveldb")
+		cache.db = kvdb.NewKVLevelDB("cache.ioleveldb", cachesize, bcsize, chunksize)
 	case "rocksdb":
-		cache.db = kvdb.NewKVRocksDB("cache.iorocksdb")
+		cache.db = kvdb.NewKVRocksDB("cache.iorocksdb", cachesize, bcsize, chunksize)
 	case "boltdb":
 		cache.db = kvdb.NewKVBoltDB("cache.ioboltdb")
 	case "iodb":
-		cache.db = kvdb.NewKVIoDB("cache.iodb", cachesize, chunksize)
+		cache.db = kvdb.NewKVIoDB("cache.iodb", cachesize, bcsize, chunksize)
 	default:
 		godbc.Check(false, "Unknown cache db type")
 	}

@@ -27,7 +27,7 @@ type KVRocksDB struct {
 	wo *rocksdb.WriteOptions
 }
 
-func NewKVRocksDB(dbpath string) *KVRocksDB {
+func NewKVRocksDB(dbpath string, blocks, bcsize uint64, blocksize uint32) *KVRocksDB {
 
 	var err error
 
@@ -37,7 +37,7 @@ func NewKVRocksDB(dbpath string) *KVRocksDB {
 
 	// Set Options
 	opts := rocksdb.NewOptions()
-	opts.SetCache(rocksdb.NewLRUCache(3 << 30))
+	opts.SetCache(rocksdb.NewLRUCache(int(bcsize)))
 	opts.SetCreateIfMissing(true)
 
 	db.db, err = rocksdb.Open(dbpath, opts)
