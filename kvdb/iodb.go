@@ -337,7 +337,9 @@ func (c *KVIoDB) Put(key, val []byte, index uint64) error {
 			offset,
 			c.segment.offset+c.segmentinfo.datasize))
 
-	c.bc.Set(index, val)
+	// Buffer cache is a Read-miss cache
+	c.bc.Invalidate(index)
+
 	n, err := c.segment.data.WriteAt(val, int64(offset-c.segment.offset))
 	godbc.Check(n == len(val))
 	godbc.Check(err == nil)
@@ -377,6 +379,9 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 					n, c.blocksize, offset, index))
 			godbc.Check(err == nil)
 			c.stats.RamHit()
+
+			// Save in buffer cache
+			c.bc.Set(index, buf)
 
 			c.segments[i].lock.RUnlock()
 			return buf, nil
