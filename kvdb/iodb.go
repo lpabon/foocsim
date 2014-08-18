@@ -16,6 +16,7 @@
 package kvdb
 
 import (
+	"flag"
 	"fmt"
 	"github.com/lpabon/buffercache"
 	"github.com/lpabon/bufferio"
@@ -33,6 +34,18 @@ const (
 	GB = 1024 * MB
 	TB = 1024 * GB
 )
+
+// Command line
+var fdirectio bool
+var fsegmentbuffers int
+var fsegmentsize int
+
+func init() {
+	// These values are set by the main program when it calls flag.Parse()
+	flag.BoolVar(&fdirectio, "iodb_directio", false, "\n\tUse DIRECTIO in iodb")
+	flag.IntVar(&fsegmentbuffers, "iodb_segmentbuffers", 32, "\n\tNumber of inflight buffers")
+	flag.IntVar(&fsegmentsize, "iodb_segmentsize", 1024, "\n\tSegment size in KB")
+}
 
 type IoSegmentInfo struct {
 	size         uint64
@@ -178,12 +191,14 @@ func NewKVIoDB(dbpath string, blocks, bcsize uint64, blocksize uint32) *KVIoDB {
 	db.stats = NewIoStats()
 	db.blocksize = uint64(blocksize)
 	db.segmentinfo.metadatasize = 4 * KB
-	db.segmentinfo.datasize = 1 * MB
-	db.segmentbuffers = 32
+	db.segmentinfo.datasize = uint64(fsegmentsize) * KB
+	db.segmentbuffers = fsegmentbuffers
 	db.maxentries = db.segmentinfo.datasize / db.blocksize
 	db.segmentinfo.size = db.segmentinfo.metadatasize + db.segmentinfo.datasize
 	db.numsegments = blocks / db.maxentries
 	db.size = db.numsegments * db.segmentinfo.size
+
+	fmt.Printf("size = %v\n buffers=%v", db.segmentinfo.datasize, db.segmentbuffers)
 
 	// Create buffer cache
 	db.bc = buffercache.NewClockCache(bcsize, uint64(db.blocksize))
@@ -213,7 +228,12 @@ func NewKVIoDB(dbpath string, blocks, bcsize uint64, blocksize uint32) *KVIoDB {
 
 	// Open the storage device
 	os.Remove(dbpath)
-	db.fp, err = os.OpenFile(dbpath, syscall.O_DIRECT|os.O_CREATE|os.O_RDWR, os.ModePerm)
+	// For DirectIO
+	if fdirectio {
+		db.fp, err = os.OpenFile(dbpath, syscall.O_DIRECT|os.O_CREATE|os.O_RDWR, os.ModePerm)
+	} else {
+		db.fp, err = os.OpenFile(dbpath, os.O_CREATE|os.O_RDWR, os.ModePerm)
+	}
 	godbc.Check(err == nil)
 
 	// Start goroutines
