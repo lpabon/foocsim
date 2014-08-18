@@ -56,9 +56,9 @@ func (c *KVBoltDB) Put(key, val []byte, index uint64) (err error) {
 	return
 }
 
-func (c *KVBoltDB) Get(key []byte, index uint64) (val []byte, err error) {
+func (c *KVBoltDB) Get(key, val []byte, index uint64) (err error) {
 	err = c.db.View(func(tx *bolt.Tx) error {
-		val = tx.Bucket([]byte("cache")).Get(key)
+		copy(val, tx.Bucket([]byte("cache")).Get(key))
 		return nil
 	})
 	return

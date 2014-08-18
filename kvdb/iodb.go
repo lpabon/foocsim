@@ -350,18 +350,17 @@ func (c *KVIoDB) Put(key, val []byte, index uint64) error {
 	return nil
 }
 
-func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
+func (c *KVIoDB) Get(key, val []byte, index uint64) error {
 
 	var n int
 	var err error
 
-	buf := make([]byte, c.blocksize)
 	offset := c.offset(index)
 
-	err = c.bc.Get(index, buf)
+	err = c.bc.Get(index, val)
 	if err == nil {
 		c.stats.BufferHit()
-		return buf, nil
+		return nil
 	}
 
 	// Check if the data is in RAM.  Go through each buffered segment
@@ -372,19 +371,20 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 		if (offset >= c.segments[i].offset) &&
 			(offset < (c.segments[i].offset + c.segmentinfo.datasize)) {
 
-			n, err = c.segments[i].data.ReadAt(buf, int64(offset-c.segments[i].offset))
+			n, err = c.segments[i].data.ReadAt(val, int64(offset-c.segments[i].offset))
 
+			godbc.Check(err == nil)
 			godbc.Check(uint64(n) == c.blocksize,
 				fmt.Sprintf("Read %v expected:%v from location:%v index:%v",
 					n, c.blocksize, offset, index))
-			godbc.Check(err == nil)
 			c.stats.RamHit()
 
-			// Save in buffer cache
-			c.bc.Set(index, buf)
-
 			c.segments[i].lock.RUnlock()
-			return buf, nil
+
+			// Save in buffer cache
+			c.bc.Set(index, val)
+
+			return nil
 		}
 
 		c.segments[i].lock.RUnlock()
@@ -392,7 +392,7 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 
 	// Read from storage
 	start := time.Now()
-	n, err = c.fp.ReadAt(buf, int64(offset))
+	n, err = c.fp.ReadAt(val, int64(offset))
 	end := time.Now()
 	c.stats.ReadTimeRecord(end.Sub(start))
 
@@ -403,9 +403,9 @@ func (c *KVIoDB) Get(key []byte, index uint64) ([]byte, error) {
 	c.stats.StorageHit()
 
 	// Save in buffer cache
-	c.bc.Set(index, buf)
+	c.bc.Set(index, val)
 
-	return buf, nil
+	return nil
 }
 
 func (c *KVIoDB) Delete(key []byte, index uint64) error {

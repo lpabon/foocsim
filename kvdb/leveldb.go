@@ -63,8 +63,12 @@ func (c *KVLevelDB) Put(key, val []byte, index uint64) error {
 	return c.db.Put(c.wo, key, val)
 }
 
-func (c *KVLevelDB) Get(key []byte, index uint64) ([]byte, error) {
-	return c.db.Get(c.ro, key)
+func (c *KVLevelDB) Get(key, val []byte, index uint64) error {
+	buf, err := c.db.Get(c.ro, key)
+	if err == nil {
+		copy(val, buf)
+	}
+	return err
 }
 
 func (c *KVLevelDB) Delete(key []byte, index uint64) error {

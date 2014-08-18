@@ -28,6 +28,7 @@ var buf []byte
 type IoCacheKvDB struct {
 	stats        *CacheStats
 	cachemap     map[string]uint64
+	chunksize    uint32
 	cachesize    uint64
 	writethrough bool
 	cacheblocks  *IoCacheBlocks
@@ -43,6 +44,7 @@ func NewIoCacheKvDB(cachesize, bcsize uint64, writethrough bool, chunksize uint3
 	cache.cacheblocks = NewIoCacheBlocks(cachesize)
 	cache.cachemap = make(map[string]uint64)
 	cache.cachesize = cachesize
+	cache.chunksize = chunksize
 	cache.writethrough = writethrough
 
 	buf = make([]byte, chunksize)
@@ -138,11 +140,14 @@ func (c *IoCacheKvDB) Read(obj, chunk string) {
 		// Read Hit
 		c.stats.readhits++
 
+		// Allocate buffer
+		val := make([]byte, c.chunksize)
+
 		// Clock Algorithm: Set that we looked
 		// at it
 		c.cacheblocks.Using(index)
 		start := time.Now()
-		val, err := c.db.Get([]byte(key), index)
+		err := c.db.Get([]byte(key), val, index)
 		end := time.Now()
 		c.stats.treads.Add(end.Sub(start))
 		godbc.Check(err == nil)
