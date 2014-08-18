@@ -60,7 +60,7 @@ func TestIoCacheEvictions(t *testing.T) {
 	assert.Equal(t, 0, c.stats.evictions)
 	_, ok := c.cachemap["key1"]
 	assert.True(t, ok)
-	assert.True(t, c.cacheblocks.cacheblocks[0].mru)
+	assert.False(t, c.cacheblocks.cacheblocks[0].mru)
 	assert.True(t, c.cacheblocks.cacheblocks[0].used)
 	assert.Equal(t, "key1", c.cacheblocks.cacheblocks[0].key)
 
@@ -68,12 +68,12 @@ func TestIoCacheEvictions(t *testing.T) {
 	assert.Equal(t, 0, c.stats.evictions)
 	_, ok = c.cachemap["key1"]
 	assert.True(t, ok)
-	assert.True(t, c.cacheblocks.cacheblocks[0].mru)
+	assert.False(t, c.cacheblocks.cacheblocks[0].mru)
 	assert.True(t, c.cacheblocks.cacheblocks[0].used)
 	assert.Equal(t, "key1", c.cacheblocks.cacheblocks[0].key)
 	_, ok = c.cachemap["key2"]
 	assert.True(t, ok)
-	assert.True(t, c.cacheblocks.cacheblocks[1].mru)
+	assert.False(t, c.cacheblocks.cacheblocks[1].mru)
 	assert.True(t, c.cacheblocks.cacheblocks[1].used)
 	assert.Equal(t, "key2", c.cacheblocks.cacheblocks[1].key)
 
@@ -89,40 +89,32 @@ func TestIoCacheEvictions(t *testing.T) {
 	assert.Equal(t, "key2", c.cacheblocks.cacheblocks[1].key)
 	_, ok = c.cachemap["key3"]
 	assert.True(t, ok)
-	assert.True(t, c.cacheblocks.cacheblocks[0].mru)
+	assert.False(t, c.cacheblocks.cacheblocks[0].mru)
 	assert.True(t, c.cacheblocks.cacheblocks[0].used)
 	assert.Equal(t, "key3", c.cacheblocks.cacheblocks[0].key)
 
-	// key3 will be invalidated.
-	// key2 is still available, but
-	// it has an mru of 0
-	c.Invalidate("key3")
-	assert.Equal(t, 1, c.stats.evictions)
+	// Set key2
+	c.Read("", "key2")
 	_, ok = c.cachemap["key2"]
-	assert.False(t, c.cacheblocks.cacheblocks[1].mru)
+	assert.True(t, ok)
+	assert.True(t, c.cacheblocks.cacheblocks[1].mru)
 	assert.True(t, c.cacheblocks.cacheblocks[1].used)
 	assert.Equal(t, "key2", c.cacheblocks.cacheblocks[1].key)
-	assert.True(t, ok)
-	_, ok = c.cachemap["key3"]
-	assert.False(t, ok)
-	assert.False(t, c.cacheblocks.cacheblocks[0].mru)
-	assert.False(t, c.cacheblocks.cacheblocks[0].used)
-	assert.Equal(t, "", c.cacheblocks.cacheblocks[0].key)
 
 	// key2 will be evicted since the
 	// index is pointing to it
 	c.Insert("key4")
 	assert.Equal(t, 2, c.stats.evictions)
 	_, ok = c.cachemap["key2"]
-	assert.NotEqual(t, "key2", c.cacheblocks.cacheblocks[1].key)
+	assert.False(t, c.cacheblocks.cacheblocks[1].mru)
+	assert.True(t, c.cacheblocks.cacheblocks[1].used)
+	assert.Equal(t, "key2", c.cacheblocks.cacheblocks[1].key)
+	assert.True(t, ok)
 	_, ok = c.cachemap["key4"]
 	assert.True(t, ok)
-	assert.True(t, c.cacheblocks.cacheblocks[1].mru)
-	assert.True(t, c.cacheblocks.cacheblocks[1].used)
-	assert.Equal(t, "key4", c.cacheblocks.cacheblocks[1].key)
 	assert.False(t, c.cacheblocks.cacheblocks[0].mru)
-	assert.False(t, c.cacheblocks.cacheblocks[0].used)
-	assert.Equal(t, "", c.cacheblocks.cacheblocks[0].key)
+	assert.True(t, c.cacheblocks.cacheblocks[0].used)
+	assert.Equal(t, "key4", c.cacheblocks.cacheblocks[0].key)
 
 }
 
