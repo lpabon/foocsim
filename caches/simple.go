@@ -110,7 +110,7 @@ func (c *SimpleCache) Insert(chunkkey string) {
 	c.cachemap[chunkkey] = 1
 }
 
-func (c *SimpleCache) Write(obj string, chunk string) {
+func (c *SimpleCache) Write(obj, chunk string) {
 	c.stats.writes++
 
 	key := c.getObjKey(obj) + chunk
@@ -126,7 +126,7 @@ func (c *SimpleCache) Write(obj string, chunk string) {
 	}
 }
 
-func (c *SimpleCache) Read(obj, chunk string) {
+func (c *SimpleCache) Read(obj, chunk string) bool {
 	c.stats.reads++
 
 	key := c.getObjKey(obj) + chunk
@@ -138,10 +138,12 @@ func (c *SimpleCache) Read(obj, chunk string) {
 		// Clock Algorithm: Set that we looked
 		// at it
 		c.cachemap[key] = 1
+		return true
 	} else {
 		// Read miss
 		// We would do IO here
 		c.Insert(key)
+		return false
 	}
 }
 
@@ -156,8 +158,7 @@ func (c *SimpleCache) Delete(obj string) {
 
 func (c *SimpleCache) String() string {
 	return fmt.Sprintf(
-		"== Cache Information ==\n"+
-			"Cache Utilization: %.2f %%\n",
+		"Cache Utilization: %.2f %%\n",
 		float64(len(c.cachemap))/float64(c.cachesize)*100.0) +
 		c.stats.String()
 }

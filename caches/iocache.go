@@ -127,7 +127,7 @@ func (c *IoCache) Insert(key string) {
 	c.cachemap[key] = index
 }
 
-func (c *IoCache) Write(obj string, chunk string) {
+func (c *IoCache) Write(obj, chunk string) {
 	c.stats.writes++
 
 	key := obj + chunk
@@ -143,7 +143,7 @@ func (c *IoCache) Write(obj string, chunk string) {
 	}
 }
 
-func (c *IoCache) Read(obj, chunk string) {
+func (c *IoCache) Read(obj, chunk string) bool {
 	c.stats.reads++
 
 	key := obj + chunk
@@ -155,10 +155,12 @@ func (c *IoCache) Read(obj, chunk string) {
 		// Clock Algorithm: Set that we looked
 		// at it
 		c.cacheblocks.Using(val)
+		return true
 	} else {
 		// Read miss
 		// We would do IO here
 		c.Insert(key)
+		return false
 	}
 }
 
@@ -168,8 +170,7 @@ func (c *IoCache) Delete(obj string) {
 
 func (c *IoCache) String() string {
 	return fmt.Sprintf(
-		"== Cache Information ==\n"+
-			"Cache Utilization: %.2f %%\n",
+		"Cache Utilization: %.2f %%\n",
 		float64(len(c.cachemap))/float64(c.cachesize)*100.0) +
 		c.stats.String()
 }

@@ -61,6 +61,46 @@ var fcachetype = flag.String("cachetype", "simple", "\n\tCache type to use."+
 	"\n\t\tsimple, null, iocache."+
 	"\n\tCache types with IO backends using iocache frontend:"+
 	"\n\t\tleveldb, rocksdb, boltdb, iodb")
+var fpagecachesize = flag.Int("pagecachesize", 0, "\n\tSize of VM page cache above the IO cache in MB")
+
+func simulate(cache, pc caches.Caches, metrics *bufio.Writer, files []*SimFile) {
+	prev_stats := cache.Stats()
+	for io := 0; io < (*fnumios); io++ {
+
+		// Save metrics
+		if (io % (*fdataperiod)) == 0 {
+			stats := cache.Stats()
+			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + stats.DumpDelta(prev_stats))
+			godbc.Check(err == nil)
+
+			// Now copy the data
+			prev_stats = stats
+		}
+
+		// Get the file
+		file, _ := filezipf.ZipfGenerate()
+		godbc.Check(int(file) <= numfiles, fmt.Sprintf("file = %v", file))
+
+		// Check if we need to delete this file
+		if rand.Intn(100) < (*fdeletion_percent) {
+			cache.Delete(strconv.FormatUint(file, 10))
+			continue
+		}
+
+		// Which block on the file
+		chunk, isread := files[file].iogen.ZipfGenerate()
+		str_file := strconv.FormatUint(file, 10)
+		str_chunk := strconv.FormatUint(chunk, 10)
+		if isread {
+			if !pc.Read(str_file, str_chunk) {
+				cache.Read(str_file, str_chunk)
+			}
+		} else {
+			pc.Write(str_file, str_chunk)
+			cache.Write(str_file, str_chunk)
+		}
+	}
+}
 
 func main() {
 
@@ -126,51 +166,34 @@ func main() {
 	}
 
 	// Initialize the stats used for delta calculations
-	prev_stats := cache.Stats()
+
 	f, _ := os.Create("cpuprofile")
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
+
+	// Add a pagecache
+	if *fpagecachesize != 0 {
+		pc = caches.NewIoCache(uint64((*fpagecachesize)*MB/(*fchunksize)), (*fwritethrough))
+	} else {
+		pc = caches.NewNullCache()
+	}
+
+	fmt.Println("== Warmup ==")
+	simulate(cache, pc, metrics, files)
+
 	// Begin the simulation
 	start := time.Now()
-	for io := 0; io < (*fnumios); io++ {
-
-		// Save metrics
-		if (io % (*fdataperiod)) == 0 {
-			stats := cache.Stats()
-			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + stats.DumpDelta(prev_stats))
-			godbc.Check(err == nil)
-
-			// Now copy the data
-			prev_stats = stats
-		}
-
-		// Get the file
-		var file uint64
-		if filedistribution_zipf {
-			file, _ = filezipf.ZipfGenerate()
-		} else {
-			// Random Distribution
-			file = uint64(r.Int63n(int64(numfiles)))
-		}
-		godbc.Check(int(file) <= numfiles, fmt.Sprintf("file = %v", file))
-
-		// Check if we need to delete this file
-		if rand.Intn(100) < (*fdeletion_percent) {
-			cache.Delete(strconv.FormatUint(file, 10))
-			continue
-		}
-
-		// Which block on the file
-		chunk, isread := files[file].iogen.ZipfGenerate()
-		if isread {
-			cache.Read(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
-		} else {
-			cache.Write(strconv.FormatUint(file, 10), strconv.FormatUint(chunk, 10))
-		}
-	}
+	simulate(cache, pc, metrics, files)
 	cache.Close()
 	end := time.Now()
 	metrics.Flush()
+
+	if *fpagecachesize != 0 {
+		fmt.Println("== Page Cache ==")
+		fmt.Print(pc)
+	}
+
+	fmt.Println("== Cache ==")
 	fmt.Print(cache)
 	fmt.Print("\nTotal Time: " + end.Sub(start).String() + "\n")
 }

@@ -16,11 +16,8 @@
 package caches
 
 type Caches interface {
-	//Invalidate(chunkkey string)
-	//Evict()
-	//Insert(chunkkey string)
 	Write(obj, chunk string)
-	Read(obj, chunk string)
+	Read(obj, chunk string) bool
 	Delete(obj string)
 	String() string
 	Stats() *CacheStats

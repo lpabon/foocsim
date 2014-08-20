@@ -131,7 +131,7 @@ func (c *IoCacheKvDB) Write(obj string, chunk string) {
 	}
 }
 
-func (c *IoCacheKvDB) Read(obj, chunk string) {
+func (c *IoCacheKvDB) Read(obj, chunk string) bool {
 	c.stats.reads++
 
 	key := obj + chunk
@@ -161,10 +161,13 @@ func (c *IoCacheKvDB) Read(obj, chunk string) {
 		godbc.Check(indexcheck == index, fmt.Sprintf("index[%v] != %v", index, indexcheck))
 		godbc.Check(key == string(keycheck), fmt.Sprintf("key[%s] != %s", key, keycheck))
 
+		return true
+
 	} else {
 		// Read miss
 		// We would do IO here
 		c.Insert(key)
+		return false
 	}
 }
 
@@ -174,8 +177,7 @@ func (c *IoCacheKvDB) Delete(obj string) {
 
 func (c *IoCacheKvDB) String() string {
 	return fmt.Sprintf(
-		"== Cache Information ==\n"+
-			"Cache Utilization: %.2f %%\n",
+		"Cache Utilization: %.2f %%\n",
 		float64(len(c.cachemap))/float64(c.cachesize)*100.0) +
 		c.stats.String() +
 		c.db.String()

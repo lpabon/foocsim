@@ -198,8 +198,6 @@ func NewKVIoDB(dbpath string, blocks, bcsize uint64, blocksize uint32) *KVIoDB {
 	db.numsegments = blocks / db.maxentries
 	db.size = db.numsegments * db.segmentinfo.size
 
-	fmt.Printf("size = %v\n buffers=%v", db.segmentinfo.datasize, db.segmentbuffers)
-
 	// Create buffer cache
 	db.bc = buffercache.NewClockCache(bcsize, uint64(db.blocksize))
 

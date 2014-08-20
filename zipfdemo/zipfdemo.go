@@ -28,7 +28,7 @@ type LoadInfo struct {
 }
 
 func main() {
-	z := zipfworkload.NewZipfWorkload(1*1024*1024*1024, 90)
+	z := zipfworkload.NewZipfWorkload(8*1024*1024*1024, 90)
 	h := make(map[uint64]*LoadInfo)
 
 	for i := 0; i < 20000000; i++ {

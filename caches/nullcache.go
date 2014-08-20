@@ -41,12 +41,13 @@ func (c *NullCache) Evict() {
 func (c *NullCache) Insert(chunkkey string) {
 }
 
-func (c *NullCache) Write(obj string, chunk string) {
+func (c *NullCache) Write(obj, chunk string) {
 	c.stats.writes++
 }
 
-func (c *NullCache) Read(obj, chunk string) {
+func (c *NullCache) Read(obj, chunk string) bool {
 	c.stats.reads++
+	return false
 }
 
 func (c *NullCache) Delete(obj string) {
@@ -55,8 +56,7 @@ func (c *NullCache) Delete(obj string) {
 
 func (c *NullCache) String() string {
 	return fmt.Sprintf(
-		"== Cache Information ==\n"+
-			"Cache Utilization: 0\n") +
+		"Cache Utilization: 0\n") +
 		c.stats.String()
 }
 
