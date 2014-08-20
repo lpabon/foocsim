@@ -63,3 +63,7 @@ func (c *NullCache) String() string {
 func (c *NullCache) Stats() *CacheStats {
 	return c.stats.Copy()
 }
+
+func (c *NullCache) StatsClear() {
+	c.stats = NewCacheStats()
+}

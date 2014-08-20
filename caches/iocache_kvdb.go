@@ -186,3 +186,7 @@ func (c *IoCacheKvDB) String() string {
 func (c *IoCacheKvDB) Stats() *CacheStats {
 	return c.stats.Copy()
 }
+
+func (c *IoCacheKvDB) StatsClear() {
+	c.stats = NewCacheStats()
+}

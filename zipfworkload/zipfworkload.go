@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"github.com/lpabon/godbc"
 	"math/rand"
-	"time"
 )
 
 type ZipfWorkload struct {
@@ -29,12 +28,12 @@ type ZipfWorkload struct {
 	rv    *rand.Rand
 }
 
-func NewZipfWorkloadsv(imax uint64, readp int, s float64, v float64) *ZipfWorkload {
+func NewZipfWorkloadsv(imax uint64, readp int, s float64, v float64, seed int64) *ZipfWorkload {
 	godbc.Require(0 <= readp && readp <= 100)
 	godbc.Require(imax > 0)
 
 	z := ZipfWorkload{}
-	z.rv = rand.New(rand.NewSource(time.Now().UnixNano()))
+	z.rv = rand.New(rand.NewSource(seed))
 	z.zipf = rand.NewZipf(z.rv, s, v, imax-1)
 	z.readp = readp
 	z.objs = imax
@@ -47,8 +46,8 @@ func NewZipfWorkloadsv(imax uint64, readp int, s float64, v float64) *ZipfWorklo
 	return &z
 }
 
-func NewZipfWorkload(imax uint64, readp int) *ZipfWorkload {
-	return NewZipfWorkloadsv(imax, readp, 1.1, 10)
+func NewZipfWorkload(imax uint64, readp int, seed int64) *ZipfWorkload {
+	return NewZipfWorkloadsv(imax, readp, 1.1, 10, seed)
 }
 
 func (z *ZipfWorkload) ZipfGenerate() (uint64, bool) {

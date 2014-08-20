@@ -21,6 +21,7 @@ import (
 	"github.com/lpabon/foocsim/zipfworkload"
 	"github.com/lpabon/godbc"
 	"os"
+	"time"
 )
 
 type LoadInfo struct {
@@ -28,7 +29,7 @@ type LoadInfo struct {
 }
 
 func main() {
-	z := zipfworkload.NewZipfWorkload(8*1024*1024*1024, 90)
+	z := zipfworkload.NewZipfWorkload(8*1024*1024*1024, 90, time.Now().UnixNano())
 	h := make(map[uint64]*LoadInfo)
 
 	for i := 0; i < 20000000; i++ {

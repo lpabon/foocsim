@@ -166,3 +166,7 @@ func (c *SimpleCache) String() string {
 func (c *SimpleCache) Stats() *CacheStats {
 	return c.stats.Copy()
 }
+
+func (c *SimpleCache) StatsClear() {
+	c.stats = NewCacheStats()
+}

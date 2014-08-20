@@ -21,5 +21,6 @@ type Caches interface {
 	Delete(obj string)
 	String() string
 	Stats() *CacheStats
+	StatsClear()
 	Close()
 }

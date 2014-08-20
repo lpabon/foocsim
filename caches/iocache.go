@@ -178,3 +178,7 @@ func (c *IoCache) String() string {
 func (c *IoCache) Stats() *CacheStats {
 	return c.stats.Copy()
 }
+
+func (c *IoCache) StatsClear() {
+	c.stats = NewCacheStats()
+}
