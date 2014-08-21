@@ -16,34 +16,84 @@
 package iogenerator
 
 import (
-	"github.com/lpabon/foocsim/zipfworkload"
+	"fmt"
+	"github.com/lpabon/foocsim/caches"
 	"math/rand"
+	"strconv"
 )
 
 type App struct {
-	files []*File
-	r     *rand.Rand
+	files            []*File
+	r                *rand.Rand
+	cache            caches.Caches
+	pc               caches.Caches
+	deletion_percent int
 }
 
-func NewApp(numfiles int, maxblocks uint64, randomfilesize bool, readp int, seed int64) {
+func NewApp(numfiles int,
+	maxblocks uint64,
+	randomfilesize bool,
+	readp int,
+	seed int64,
+	deletion_percent int,
+	pagecacheblocks uint64,
+	cache caches.Caches) *App {
+
 	app := &App{}
 	app.files = make([]*File, numfiles)
+	app.cache = cache
+	app.deletion_percent = deletion_percent
 
+	// Create random number for accessing files
 	app.r = rand.New(rand.NewSource(seed))
 
+	// Create page cache
+	if pagecacheblocks != 0 {
+		app.pc = caches.NewIoCache(pagecacheblocks, true /* writethrough */)
+	} else {
+		app.pc = caches.NewNullCache()
+	}
+
+	// Create files
 	for file := 0; file < len(app.files); file++ {
 		var size uint64
 		if randomfilesize {
-			size = uint64(app.r.Int63n(maxblocks)) + uint64(1) // in case we get 0
+			size = uint64(app.r.Int63n(int64(maxblocks))) + uint64(1) // in case we get 0
 		} else {
-			size = uint64(maxfilesize)
+			size = maxblocks
 		}
 		app.files[file] = NewFile(size, readp)
 	}
+
+	return app
 }
 
-func (a *App) Gen() (file, block uint64, read bool) {
-	file = a.r.Intn(len(a.files))
-	block, read = a.files[file].Gen()
-	return
+func (a *App) Gen() {
+	file := a.r.Intn(len(a.files))
+	block, isread := a.files[file].Gen()
+
+	str_file := strconv.FormatInt(int64(file), 10)
+	str_block := strconv.FormatUint(block, 10)
+
+	// Check if we need to delete this file
+	if rand.Intn(100) < (a.deletion_percent) {
+		a.cache.Delete(str_file)
+		return
+	}
+
+	// Which block on the file
+	if isread {
+		if !a.pc.Read(str_file, str_block) {
+			a.cache.Read(str_file, str_block)
+		}
+	} else {
+		a.pc.Write(str_file, str_block)
+		a.cache.Write(str_file, str_block)
+	}
+}
+
+func (a *App) String() string {
+
+	return fmt.Sprint("== Page Cache ==\n") +
+		fmt.Sprint(a.pc)
 }

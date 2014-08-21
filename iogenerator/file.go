@@ -24,10 +24,12 @@ type File struct {
 	size  uint64
 }
 
-func NewFile(size uint64, readp int) {
+func NewFile(size uint64, readp int) *File {
 	f := &File{}
-	f.iogen = zipfworkload.NewZipfWorkload(imax, readp)
+	f.iogen = zipfworkload.NewZipfWorkload(size, readp)
 	f.size = size
+
+	return f
 }
 
 func (f *File) Gen() (uint64, bool) {
