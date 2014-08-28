@@ -17,7 +17,6 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"github.com/lpabon/foocsim/caches"
 	"github.com/lpabon/foocsim/iogenerator"
@@ -34,55 +33,18 @@ const (
 	TB = 1024 * GB
 )
 
-// Command line
-type Args struct {
-	blocksize, numfiles, apps    int
-	numios, read_percent         int
-	dataperiod, deletion_percent int
-	pagecachesize, cachesize     int
-	randomfilesize, writethrough bool
-	cachetype                    string
-	maxfilesize                  uint64
-	bcpercent                    float64
-}
-
-var args Args
-
-func init() {
-	flag.IntVar(&args.blocksize, "blocksize", 64, "\n\tBlock size in KB.")
-	flag.Uint64Var(&args.maxfilesize, "maxfilesize", 8*1024*1024, "\n\tMaximum file size MB. Default 8TB.")
-	flag.BoolVar(&args.randomfilesize, "randomfilesize", false,
-		"\n\tCreate files of random size with a maximum of maxfilesize."+
-			"\n\tIf false, set the file size exactly to maxfilesize.")
-	flag.IntVar(&args.cachesize, "cachesize", 8, "\n\tCache size in GB.")
-	flag.Float64Var(&args.bcpercent, "bcpercent", 0.1, "\n\tBuffer Cache size as a percentage of the cache size")
-	flag.IntVar(&args.numfiles, "numfiles", 1, "\n\tNumber of files")
-	flag.IntVar(&args.numios, "ios", 5000000, "\n\tNumber of IOs for each client")
-	flag.IntVar(&args.deletion_percent, "deletions", 0, "\n\t% of File deletions")
-	flag.IntVar(&args.read_percent, "reads", 65, "\n\t% of Reads")
-	flag.BoolVar(&args.writethrough, "writethrough", true, "\n\tWritethrough or read miss")
-	flag.IntVar(&args.dataperiod, "dataperiod", 1000, "\n\tNumber of IOs per data collected")
-	flag.StringVar(&args.cachetype, "cachetype", "simple", "\n\tCache type to use."+
-		"\n\tCache types with no IO backend:"+
-		"\n\t\tsimple, null, iocache."+
-		"\n\tCache types with IO backends using iocache frontend:"+
-		"\n\t\tleveldb, rocksdb, boltdb, iodb")
-	flag.IntVar(&args.pagecachesize, "pagecachesize", 0, "\n\tSize of VM page cache above the IO cache in MB")
-	flag.IntVar(&args.apps, "clients", 1, "\n\tNumber of clients")
-}
-
-func simulate(cache caches.Caches, metrics *bufio.Writer, seed int64) {
+func simulate(args *Args, cache caches.Caches, metrics *bufio.Writer, seed int64, printstats bool) {
 
 	// Create applications
 	apps := make([]*iogenerator.App, args.apps)
 	for app := 0; app < len(apps); app++ {
 		apps[app] = iogenerator.NewApp(args.numfiles,
-			args.maxfilesize*uint64(MB)/uint64(args.blocksize*KB),
+			args.maxfileblocks,
 			args.randomfilesize,
 			args.read_percent,
 			seed,
 			args.deletion_percent,
-			uint64(args.pagecachesize*MB/(args.blocksize*KB)),
+			args.pagecacheblocks,
 			cache)
 	}
 
@@ -107,20 +69,23 @@ func simulate(cache caches.Caches, metrics *bufio.Writer, seed int64) {
 
 	}
 
-	// Generate I/O for each app
-	for app := 0; app < len(apps); app++ {
-		fmt.Printf("## App %d ##\n", app)
-		fmt.Print(apps[app])
-	}
+	if printstats {
+		// Print app stats
+		for app := 0; app < len(apps); app++ {
+			fmt.Printf("## App %d ##\n", app)
+			fmt.Print(apps[app])
+		}
 
-	fmt.Println("== Cache ==")
-	fmt.Print(cache)
+		// Print cache stats
+		fmt.Println("== Cache ==")
+		fmt.Print(cache)
+	}
 }
 
 func main() {
 
 	// Parse flags
-	flag.Parse()
+	args := NewArgs()
 
 	// Check parameters
 	godbc.Check(args.blocksize > 0, "blocksize must be greater than 0")
@@ -131,25 +96,25 @@ func main() {
 	// Setup seed for random numbers
 	seed := time.Now().UnixNano()
 
-	// Config
-	blocksize := args.blocksize * KB
-	cachesize := uint64(GB*args.cachesize) / uint64(blocksize)
-
 	// Print here Simulation information, also Mean file size and std deviation
 
 	// Create the cache
 	var cache caches.Caches
 	switch args.cachetype {
 	case "simple":
-		cache = caches.NewSimpleCache(cachesize, (args.writethrough))
+		cache = caches.NewSimpleCache(args.cacheblocks, (args.writethrough))
 	case "null":
 		cache = caches.NewNullCache()
 	case "iocache":
-		cache = caches.NewIoCache(cachesize, (args.writethrough))
+		cache = caches.NewIoCache(args.cacheblocks, (args.writethrough))
 	default:
 		// buffer cache = cache size * fbcpercent %
 		bcsize := uint64(float64(GB*args.cachesize) * (args.bcpercent / 100.0))
-		cache = caches.NewIoCacheKvDB(cachesize, bcsize, (args.writethrough), uint32(blocksize), args.cachetype)
+		cache = caches.NewIoCacheKvDB(args.cacheblocks,
+			bcsize,
+			args.writethrough,
+			uint32(args.blocksize),
+			args.cachetype)
 	}
 
 	// Initialize the stats used for delta calculations
@@ -159,28 +124,31 @@ func main() {
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
 
-	// ------------------- WARMUP --------------------
-	// Setup file to write cache metrics
-	fp, err := os.Create("cache-warmup.data")
-	godbc.Check(err == nil)
-	metrics := bufio.NewWriter(fp)
+	if args.warmup {
+		// ------------------- WARMUP --------------------
+		// Setup file to write cache metrics
+		fp, err := os.Create("cache-warmup.data")
+		godbc.Check(err == nil)
+		defer fp.Close()
+		metrics := bufio.NewWriter(fp)
 
-	fmt.Println("== Warmup ==")
-	simulate(cache, metrics, seed)
-	metrics.Flush()
-	fp.Close()
+		fmt.Println("== Warmup ==")
+		simulate(args, cache, metrics, seed, args.warmupstats)
+		metrics.Flush()
+	}
 
 	// ----------------- SIMULATION ------------------
 	// Setup file to write cache metrics
-	fp, err = os.Create("cache.data")
+	fp, err := os.Create("cache.data")
 	godbc.Check(err == nil)
 	defer fp.Close()
-	metrics = bufio.NewWriter(fp)
+	metrics := bufio.NewWriter(fp)
 
 	// Begin the simulation
+	fmt.Println("== Simulation ==")
 	cache.StatsClear()
 	start := time.Now()
-	simulate(cache, metrics, seed)
+	simulate(args, cache, metrics, seed, true /* print stats */)
 	cache.Close()
 	end := time.Now()
 	metrics.Flush()
