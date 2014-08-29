@@ -18,6 +18,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/lpabon/foocsim/args"
 	"github.com/lpabon/foocsim/caches"
 	"github.com/lpabon/foocsim/iogenerator"
 	"github.com/lpabon/godbc"
@@ -33,27 +34,20 @@ const (
 	TB = 1024 * GB
 )
 
-func simulate(args *Args, cache caches.Caches, metrics *bufio.Writer, seed int64, printstats bool) {
+func simulate(config *args.Args, cache caches.Caches, metrics *bufio.Writer, seed int64, printstats bool) {
 
 	// Create applications
-	apps := make([]*iogenerator.App, args.apps)
+	apps := make([]*iogenerator.App, config.Apps())
 	for app := 0; app < len(apps); app++ {
-		apps[app] = iogenerator.NewApp(args.numfiles,
-			args.maxfileblocks,
-			args.randomfilesize,
-			args.read_percent,
-			seed,
-			args.deletion_percent,
-			args.pagecacheblocks,
-			cache)
+		apps[app] = iogenerator.NewApp(config, seed, cache)
 	}
 
 	// Initialize the delta stats
 	prev_stats := cache.Stats()
-	for io := 0; io < args.numios; io++ {
+	for io := 0; io < config.Ios(); io++ {
 
 		// Save metrics
-		if (io % (args.dataperiod)) == 0 {
+		if (io % (config.DataPeriod())) == 0 {
 			stats := cache.Stats()
 			_, err := metrics.WriteString(fmt.Sprintf("%d,", io) + stats.DumpDelta(prev_stats))
 			godbc.Check(err == nil)
@@ -85,13 +79,7 @@ func simulate(args *Args, cache caches.Caches, metrics *bufio.Writer, seed int64
 func main() {
 
 	// Parse flags
-	args := NewArgs()
-
-	// Check parameters
-	godbc.Check(args.blocksize > 0, "blocksize must be greater than 0")
-	godbc.Check(args.maxfilesize > 0, "maxfilesize must be greater than 0")
-	godbc.Check(0 <= (args.read_percent) && (args.read_percent) <= 100, "reads must be between 0 and 100")
-	godbc.Check(0 <= (args.deletion_percent) && (args.deletion_percent) <= 100, "deletions must be between 0 and 100")
+	config := args.NewArgs()
 
 	// Setup seed for random numbers
 	seed := time.Now().UnixNano()
@@ -100,21 +88,20 @@ func main() {
 
 	// Create the cache
 	var cache caches.Caches
-	switch args.cachetype {
+	switch config.CacheType() {
 	case "simple":
-		cache = caches.NewSimpleCache(args.cacheblocks, (args.writethrough))
+		cache = caches.NewSimpleCache(config.CacheBlocks(), config.Writethrough())
 	case "null":
 		cache = caches.NewNullCache()
 	case "iocache":
-		cache = caches.NewIoCache(args.cacheblocks, (args.writethrough))
+		cache = caches.NewIoCache(config.CacheBlocks(), config.Writethrough())
 	default:
 		// buffer cache = cache size * fbcpercent %
-		bcsize := uint64(float64(GB*args.cachesize) * (args.bcpercent / 100.0))
-		cache = caches.NewIoCacheKvDB(args.cacheblocks,
-			bcsize,
-			args.writethrough,
-			uint32(args.blocksize),
-			args.cachetype)
+		cache = caches.NewIoCacheKvDB(config.CacheBlocks(),
+			config.BufferCacheSize(),
+			config.Writethrough(),
+			config.Blocksize(),
+			config.CacheType())
 	}
 
 	// Initialize the stats used for delta calculations
@@ -124,7 +111,7 @@ func main() {
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
 
-	if args.warmup {
+	if config.UseWarmup() {
 		// ------------------- WARMUP --------------------
 		// Setup file to write cache metrics
 		fp, err := os.Create("cache-warmup.data")
@@ -133,7 +120,7 @@ func main() {
 		metrics := bufio.NewWriter(fp)
 
 		fmt.Println("== Warmup ==")
-		simulate(args, cache, metrics, seed, args.warmupstats)
+		simulate(config, cache, metrics, seed, config.ShowWarmupStats())
 		metrics.Flush()
 	}
 
@@ -148,7 +135,7 @@ func main() {
 	fmt.Println("== Simulation ==")
 	cache.StatsClear()
 	start := time.Now()
-	simulate(args, cache, metrics, seed, true /* print stats */)
+	simulate(config, cache, metrics, seed, true /* print stats */)
 	cache.Close()
 	end := time.Now()
 	metrics.Flush()

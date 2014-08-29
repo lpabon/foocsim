@@ -13,10 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package args
 
 import (
 	"flag"
+	"github.com/lpabon/godbc"
+)
+
+const (
+	KB = 1024
+	MB = 1024 * KB
+	GB = 1024 * MB
+	TB = 1024 * GB
 )
 
 // Command line
@@ -31,7 +39,7 @@ type Args struct {
 	maxfilesize                  uint64
 	bcpercent                    float64
 	pagecacheblocks, cacheblocks uint64
-	maxfileblocks                uint64
+	maxfileblocks, bcsize        uint64
 	warmupstats, warmup          bool
 }
 
@@ -66,17 +74,87 @@ func init() {
 func NewArgs() *Args {
 	if !flag.Parsed() {
 		flag.Parse()
-		args.calc()
+
+		// Check parameters
+		godbc.Check(args.blocksizekb > 0, "blocksize must be greater than 0")
+		godbc.Check(args.maxfilesize > 0, "maxfilesize must be greater than 0")
+		godbc.Check(0 <= (args.read_percent) && (args.read_percent) <= 100, "reads must be between 0 and 100")
+		godbc.Check(0 <= (args.deletion_percent) && (args.deletion_percent) <= 100, "deletions must be between 0 and 100")
+
+		args.initialize()
 	}
+
 	return &args
 }
 
-func (a *Args) calc() {
-
-	// Config
+func (a *Args) initialize() {
 	a.blocksize = a.blocksizekb * KB
 	a.cacheblocks = uint64(GB*a.cachesize) / uint64(a.blocksize)
-	a.maxfileblocks = a.maxfilesize * uint64(MB) / uint64(a.blocksize*KB)
-	a.pagecacheblocks = uint64(a.pagecachesize * MB / (a.blocksize * KB))
+	a.maxfileblocks = a.maxfilesize * uint64(MB) / uint64(a.blocksize)
+	a.pagecacheblocks = uint64(a.pagecachesize * MB / (a.blocksize))
+	a.bcsize = uint64(float64(GB*a.cachesize) * (a.bcpercent / 100.0))
+}
 
+func (a *Args) Blocksize() uint32 {
+	return uint32(a.blocksize)
+}
+
+func (a *Args) Files() int {
+	return a.numfiles
+}
+
+func (a *Args) Apps() int {
+	return a.apps
+}
+
+func (a *Args) Ios() int {
+	return a.numios
+}
+
+func (a *Args) ReadPercent() int {
+	return a.read_percent
+}
+
+func (a *Args) DataPeriod() int {
+	return a.dataperiod
+}
+
+func (a *Args) DeletionPercent() int {
+	return a.deletion_percent
+}
+
+func (a *Args) PageCacheBlocks() uint64 {
+	return a.pagecacheblocks
+}
+
+func (a *Args) CacheBlocks() uint64 {
+	return a.cacheblocks
+}
+
+func (a *Args) UseRandomFileSize() bool {
+	return a.randomfilesize
+}
+
+func (a *Args) Writethrough() bool {
+	return a.writethrough
+}
+
+func (a *Args) CacheType() string {
+	return a.cachetype
+}
+
+func (a *Args) MaxFileBlocks() uint64 {
+	return a.maxfileblocks
+}
+
+func (a *Args) BufferCacheSize() uint64 {
+	return a.bcsize
+}
+
+func (a *Args) ShowWarmupStats() bool {
+	return a.warmupstats
+}
+
+func (a *Args) UseWarmup() bool {
+	return a.warmup
 }

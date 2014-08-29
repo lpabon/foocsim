@@ -17,6 +17,7 @@ package iogenerator
 
 import (
 	"fmt"
+	"github.com/lpabon/foocsim/args"
 	"github.com/lpabon/foocsim/caches"
 	"math/rand"
 	"strconv"
@@ -30,26 +31,19 @@ type App struct {
 	deletion_percent int
 }
 
-func NewApp(numfiles int,
-	maxblocks uint64,
-	randomfilesize bool,
-	readp int,
-	seed int64,
-	deletion_percent int,
-	pagecacheblocks uint64,
-	cache caches.Caches) *App {
+func NewApp(config *args.Args, seed int64, cache caches.Caches) *App {
 
 	app := &App{}
-	app.files = make([]*File, numfiles)
+	app.files = make([]*File, config.Files())
 	app.cache = cache
-	app.deletion_percent = deletion_percent
+	app.deletion_percent = config.DeletionPercent()
 
 	// Create random number for accessing files
 	app.r = rand.New(rand.NewSource(seed))
 
 	// Create page cache
-	if pagecacheblocks != 0 {
-		app.pc = caches.NewIoCache(pagecacheblocks, true /* writethrough */)
+	if config.PageCacheBlocks() != 0 {
+		app.pc = caches.NewIoCache(config.PageCacheBlocks(), true /* writethrough */)
 	} else {
 		app.pc = caches.NewNullCache()
 	}
@@ -57,12 +51,12 @@ func NewApp(numfiles int,
 	// Create files
 	for file := 0; file < len(app.files); file++ {
 		var size uint64
-		if randomfilesize {
-			size = uint64(app.r.Int63n(int64(maxblocks))) + uint64(1) // in case we get 0
+		if config.UseRandomFileSize() {
+			size = uint64(app.r.Int63n(int64(config.MaxFileBlocks()))) + uint64(1) // in case we get 0
 		} else {
-			size = maxblocks
+			size = config.MaxFileBlocks()
 		}
-		app.files[file] = NewFile(size, readp)
+		app.files[file] = NewFile(size, config.ReadPercent())
 	}
 
 	return app
