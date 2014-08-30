@@ -60,42 +60,48 @@ $ ./fooplot.gp
 $ go run foocsim.go -help
 Usage of foocsim:
   -bcpercent=0.1:
-    Buffer Cache size as a percentage of the cache size
+  Buffer Cache size as a percentage of the cache size
+  -blocksize=64:
+  Block size in KB.
   -cachesize=8:
-    Cache size in GB.
+  Cache size in GB.
   -cachetype="simple":
-    Cache type to use.
-    Cache types with no IO backend:
-      simple, null, iocache.
-    Cache types with IO backends using iocache frontend:
-      leveldb, rocksdb, boltdb, iodb
-  -chunksize=64:
-    Chunk size in KB.
+  Cache type to use.
+  Cache types with no IO backend:
+    simple, null, iocache.
+  Cache types with IO backends using iocache frontend:
+    leveldb, rocksdb, boltdb, iodb
+  -clients=1:
+  Number of clients
   -dataperiod=1000:
-    Number of IOs per data collected
+  Number of IOs per data collected
   -deletions=0:
-    % of File deletions
+  % of File deletions
   -iodb_directio=false:
-    Use DIRECTIO in iodb
+  Use DIRECTIO in iodb
   -iodb_segmentbuffers=32:
-    Number of inflight buffers
+  Number of inflight buffers
   -iodb_segmentsize=1024:
-    Segment size in KB
+  Segment size in KB
   -ios=5000000:
-    Number of IOs
+  Number of IOs for each client
   -maxfilesize=8388608:
-    Maximum file size MB. Default 8TB.
+  Maximum file size MB. Default 8TB.
   -numfiles=1:
-    Number of files
+  Number of files
+  -pagecachesize=0:
+  Size of VM page cache above the IO cache in MB
   -randomfilesize=false:
-    Create files of random size with a maximum of maxfilesize.
-    If false, set the file size exactly to maxfilesize.
+  Create files of random size with a maximum of maxfilesize.
+  If false, set the file size exactly to maxfilesize.
   -reads=65:
-    % of Reads
+  % of Reads
+  -warmup=true:
+  Warmup cache before running simulation
+  -warmupstats=false:
+  Print stats after warmup stage
   -writethrough=true:
-    Writethrough or read miss
-  -zipf_filedistribution=true:
-    Use a Zipf or Random distribution
+  Writethrough or read miss
 ```
 
 ### Cache Types
