@@ -3,12 +3,20 @@
 Foocsim is a simple single threaded cache simulator.  It uses a ZipF load generator to study the behavior of various cache implementations.
 
 ## Installation
+
+### Binary Install
+Go to [RELEASES][] and download the Linux x86_64 binary.
+
+### Source Install
+
 Go to your `GOPATH` type:
 
 ```
 $ go get github.com/lpabon/foocsim
 $ cd $GOPATH/src/github.com/lpabon/foocsim
 $ go get ./...
+$ cd foocsim
+$ go build
 ```
 
 ## Example
@@ -16,21 +24,27 @@ $ go get ./...
 * Run the default simulation
 
 ```
-$ cd $GOPATH/src/github.com/lpabon/foocsim/foocsim
-$ go run foocsim.go
-== Cache Information ==
-Cache Utilization: 100.00 %
-Read Hit Rate: 0.8447
-Write Hit Rate: 0.8451
-Read hits: 2028005
-Write hits: 1350885
-Delete hits: 2375962
-Reads: 2400906
-Writes: 1598558
-Deletions: 6000536
-Insertions: 1971459
-Evictions: 358430
-Invalidations: 1350885
+$ ./foocsim
+== Warmup ==
+== Simulation ==
+== Cache ==
+Cache Utilization: 60.7https://github.com/lpabon/foocsim/releases8 %
+Read Hit Rate: 0.6436
+Write Hit Rate: 0.6403
+Read hits: 41779
+Write hits: 22464
+Delete hits: 0
+Reads: 64916
+Writes: 35084
+Deletions: 0
+Insertions: 58221
+Evictions: 0
+Invalidations: 22464
+Mean Read Latency: 0.00 usecs
+Mean Write Latency: 0.00 usecs
+Mean Delete Latency: 0.00 usecs
+
+Total Time: 81.810658ms
 ```
 
 * The simulation created a file called `cache.data`
@@ -40,9 +54,44 @@ Invalidations: 1350885
 $ ./fooplot.gp
 ```
 
-### Example Plots
+* Run simulation with the iodb backend:
 
-![deletes](images/cache_deletes.png)
+```
+$ ./foocsim -cachetype=iodb
+== Warmup ==
+== Simulation ==
+== Cache ==
+Cache Utilization: 60.51 %
+Read Hit Rate: 0.6440
+Write Hit Rate: 0.6466
+Read hits: 41800
+Write hits: 22692
+Delete hits: 0
+Reads: 64904
+Writes: 35096
+Deletions: 0
+Insertions: 58200
+Evictions: 0
+Invalidations: 22692
+Mean Read Latency: 172.19 usecs
+Mean Write Latency: 77.41 usecs
+Mean Delete Latency: 0.25 usecs
+== IoDB Information ==
+Ram Hit Rate: 0.1095
+Ram Hits: 8582
+Buffer Hit Rate: 0.2428
+Buffer Hits: 19027
+Storage Hits: 50766
+Wraps: 0
+Segments Skipped: 31
+Mean Read Latency: 151.11 usec
+Mean Segment Read Latency: 0.00 usec
+Mean Write Latency: 2596.59 usec
+
+Total Time: 16.462160666s
+```
+
+### Example Plots
 
 ![readhitrate](images/cache_readhitrate.png)
 
@@ -119,3 +168,4 @@ Usage of foocsim:
 
 [Mercury]: http://storageconference.us/2012/Papers/04.Flash.1.Mercury.pdf
 [BoltDB]: https://github.com/boltdb/bolt
+[RELEASES]: https://github.com/lpabon/foocsim/releases
