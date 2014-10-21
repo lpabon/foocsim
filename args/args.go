@@ -55,8 +55,8 @@ func init() {
 	flag.IntVar(&args.cachesize, "cachesize", 8, "\n\tCache size in GB.")
 	flag.Float64Var(&args.bcpercent, "bcpercent", 0.1, "\n\tBuffer Cache size as a percentage of the cache size")
 	flag.IntVar(&args.numfiles, "numfiles", 1, "\n\tNumber of files")
-	flag.IntVar(&args.numios, "ios", 5000000, "\n\tNumber of IOs for each client")
-	flag.IntVar(&args.deletion_percent, "deletions", 0, "\n\t% of File deletions")
+	flag.IntVar(&args.numios, "ios", 100000, "\n\tNumber of IOs for each client")
+	//flag.IntVar(&args.deletion_percent, "deletions", 0, "\n\t% of File deletions")
 	flag.IntVar(&args.read_percent, "reads", 65, "\n\t% of Reads")
 	flag.BoolVar(&args.writethrough, "writethrough", true, "\n\tWritethrough or read miss")
 	flag.IntVar(&args.dataperiod, "dataperiod", 1000, "\n\tNumber of IOs per data collected")
@@ -64,7 +64,7 @@ func init() {
 		"\n\tCache types with no IO backend:"+
 		"\n\t\tsimple, null, iocache."+
 		"\n\tCache types with IO backends using iocache frontend:"+
-		"\n\t\tleveldb, rocksdb, boltdb, iodb")
+		"\n\t\tboltdb, iodb")
 	flag.IntVar(&args.pagecachesize, "pagecachesize", 0, "\n\tSize of VM page cache above the IO cache in MB")
 	flag.IntVar(&args.apps, "clients", 1, "\n\tNumber of clients")
 	flag.BoolVar(&args.warmupstats, "warmupstats", false, "\n\tPrint stats after warmup stage")

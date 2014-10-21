@@ -3,7 +3,7 @@
 Foocsim is a simple single threaded cache simulator.  It uses a ZipF load generator to study the behavior of various cache implementations.
 
 ## Installation
-You will need to have leveldb and rocksdb development headers and libraries installed.  Then, in your `GOPATH` type:
+Go to your `GOPATH` type:
 
 ```
 $ go get github.com/lpabon/foocsim
@@ -70,7 +70,7 @@ Usage of foocsim:
   Cache types with no IO backend:
     simple, null, iocache.
   Cache types with IO backends using iocache frontend:
-    leveldb, rocksdb, boltdb, iodb
+    boltdb, iodb
   -clients=1:
   Number of clients
   -dataperiod=1000:
@@ -115,13 +115,7 @@ Usage of foocsim:
 #### Caches which generate IO
 
 * **boltdb**:  Uses [BoltDB][]
-* **leveldb**: Uses [levigo][] Golang bindings for [LevelDB][]
-* **rocksdb**: Uses [gorocksdb][] Golang bindings for [RocksDB][]
 * **iodb**: Uses data structures based on [Mercury][].
 
 [Mercury]: http://storageconference.us/2012/Papers/04.Flash.1.Mercury.pdf
 [BoltDB]: https://github.com/boltdb/bolt
-[LevelDB]: http://code.google.com/p/leveldb/
-[levigo]: https://github.com/jmhodges/levigo
-[gorocksdb]: https://github.com/DanielMorsing/rocksdb
-[RocksDB]: http://rocksdb.org/

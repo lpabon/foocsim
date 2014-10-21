@@ -50,10 +50,6 @@ func NewIoCacheKvDB(cachesize, bcsize uint64, writethrough bool, chunksize uint3
 	buf = make([]byte, chunksize)
 
 	switch dbtype {
-	case "leveldb":
-		cache.db = kvdb.NewKVLevelDB("cache.ioleveldb", cachesize, bcsize, chunksize)
-	case "rocksdb":
-		cache.db = kvdb.NewKVRocksDB("cache.iorocksdb", cachesize, bcsize, chunksize)
 	case "boltdb":
 		cache.db = kvdb.NewKVBoltDB("cache.ioboltdb")
 	case "iodb":
