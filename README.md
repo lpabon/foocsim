@@ -1,6 +1,6 @@
 # foocsim
 
-Foocsim is a simple single threaded cache simulator.  It uses a ZipF load generator to study the behavior of various cache implementations.
+Foocsim is a simple single threaded cache simulator.  It uses an SPC1-like load generator to study the behavior of various cache implementations.
 
 ## Installation
 
@@ -21,30 +21,47 @@ $ go build
 
 ## Example
 
-* Run the default simulation
+* Run a simulation using a block size of 4KB and an application page cache of 8MB.
 
 ```
 $ ./foocsim
-== Warmup ==
+go run foocsim.go -cachetype=iocache -blocksize=4 -ios=10000000 -warmup=false -pagecachesize=8 
 == Simulation ==
-== Cache ==
-Cache Utilization: 60.7https://github.com/lpabon/foocsim/releases8 %
-Read Hit Rate: 0.6436
-Write Hit Rate: 0.6403
-Read hits: 41779
-Write hits: 22464
+## App 0 ##
+== Page Cache ==
+Cache Utilization: 91.89 %
+Read Hit Rate: 0.0066
+Write Hit Rate: 0.3665
+Read hits: 44279
+Write hits: 1200506
 Delete hits: 0
-Reads: 64916
-Writes: 35084
+Reads: 6724310
+Writes: 3275690
 Deletions: 0
-Insertions: 58221
-Evictions: 0
-Invalidations: 22464
+Insertions: 9955721
+Evictions: 8753333
+Invalidations: 1200506
+Mean Read Latency: 0.00 usecs
+Mean Write Latency: 0.00 usecs
+Mean Delete Latency: 0.00 usecs
+== Cache ==
+Cache Utilization: 17.61 %
+Read Hit Rate: 0.9526
+Write Hit Rate: 0.9688
+Read hits: 6363241
+Write hits: 3173650
+Delete hits: 0
+Reads: 6680031
+Writes: 3275690
+Deletions: 0
+Insertions: 3592480
+Evictions: 49518
+Invalidations: 3173650
 Mean Read Latency: 0.00 usecs
 Mean Write Latency: 0.00 usecs
 Mean Delete Latency: 0.00 usecs
 
-Total Time: 81.810658ms
+Total Time: 25.641628781s
 ```
 
 * The simulation created a file called `cache.data`
