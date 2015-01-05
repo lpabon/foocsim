@@ -2,6 +2,7 @@
 
 set terminal png
 set datafile separator ","
+set key right bottom
 set output "cache_readhitrate.png"
 plot "cache.data" using 1:2 every 5 title "Read Hit Rate"
 
