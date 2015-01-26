@@ -16,35 +16,45 @@
 package iogenerator
 
 import (
+	"fmt"
+	"github.com/lpabon/godbc"
 	"github.com/lpabon/goioworkload/spc1"
 )
 
 type File struct {
 	iogen *spc1.Spc1Io
-	size  uint64
 	asu1  uint32
 }
+
+var (
+	initialized bool
+)
 
 // Size in 4k blocks
 func NewFile(size uint64, readp int) *File {
 	f := &File{}
-	f.asu1 = uint32(size / 2)
-	spc1.Spc1Init(
-		100,    //bsus: Doesn't matter since we do not use timing
-		1,      //contexts
-		f.asu1, // asu1 in 4k blocks
-		f.asu1, // asu2 in 4k blocks
-		uint32((float64(f.asu1)/0.45)*0.1), // asu3, unsused
-	)
-	f.iogen = spc1.NewSpc1Io(1)
-	f.size = size
+	f.asu1 = uint32(float64(size) * 0.45)
+	asu3 := uint32(float64(size) * 0.1)
 
+	if !initialized {
+		fmt.Println("Initializing")
+		err := spc1.Spc1Init(
+			100,    //bsus: Doesn't matter since we do not use timing
+			1,      //contexts
+			f.asu1, // asu1 in 4k blocks
+			f.asu1, // asu2 in 4k blocks
+			asu3)   // asu3, unsused
+		godbc.Check(err == nil, err)
+		initialized = true
+	}
+	f.iogen = spc1.NewSpc1Io(1)
 	return f
 }
 
 func (f *File) Gen() (uint64, bool) {
 	if f.iogen.Blocks <= 0 {
 		f.iogen.Generate()
+		godbc.Invariant(f.iogen)
 		for f.iogen.Asu == 3 {
 			f.iogen.Generate()
 		}

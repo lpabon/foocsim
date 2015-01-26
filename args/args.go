@@ -48,7 +48,7 @@ var args Args
 
 func init() {
 	flag.IntVar(&args.blocksizekb, "blocksize", 64, "\n\tBlock size in KB.")
-	flag.Uint64Var(&args.maxfilesize, "maxfilesize", 8*1024*1024, "\n\tMaximum file size MB. Default 8TB.")
+	flag.Uint64Var(&args.maxfilesize, "maxfilesize", 80*1024, "\n\tMaximum file size MB. Default 80GB.")
 	flag.BoolVar(&args.randomfilesize, "randomfilesize", false,
 		"\n\tCreate files of random size with a maximum of maxfilesize."+
 			"\n\tIf false, set the file size exactly to maxfilesize.")
