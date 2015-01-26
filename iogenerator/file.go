@@ -22,16 +22,19 @@ import (
 type File struct {
 	iogen *spc1.Spc1Io
 	size  uint64
+	asu1  uint32
 }
 
+// Size in 4k blocks
 func NewFile(size uint64, readp int) *File {
 	f := &File{}
+	f.asu1 = uint32(size / 2)
 	spc1.Spc1Init(
-		100, //bsus: Doesn't matter since we do not use timing
-		1,   //contexts
-		uint32(size/(2*4096)),           // asu1 in 4k blocks
-		uint32(size/(2*4096)),           // asu2 in 4k blocks
-		uint32((float64(size)/0.9)*0.1), // asu3, unsused
+		100,    //bsus: Doesn't matter since we do not use timing
+		1,      //contexts
+		f.asu1, // asu1 in 4k blocks
+		f.asu1, // asu2 in 4k blocks
+		uint32((float64(f.asu1)/0.45)*0.1), // asu3, unsused
 	)
 	f.iogen = spc1.NewSpc1Io(1)
 	f.size = size
@@ -46,7 +49,7 @@ func (f *File) Gen() (uint64, bool) {
 			f.iogen.Generate()
 		}
 	}
-	offset := uint64((uint32(f.size/2)*(f.iogen.Asu-1))+f.iogen.Offset) * 4096
+	offset := uint64((f.asu1 * (f.iogen.Asu - 1)) + f.iogen.Offset)
 	f.iogen.Offset++
 	f.iogen.Blocks--
 	return offset, f.iogen.Isread
